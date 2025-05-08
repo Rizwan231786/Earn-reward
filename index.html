@@ -1,0 +1,924 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EarnEasy - Click, Refer & Earn</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #3B82F6;
+            --primary-dark: #1E40AF;
+            --secondary-color: #10B981;
+            --secondary-dark: #047857;
+            --text-dark: #1F2937;
+            --text-light: #6B7280;
+            --bg-light: #F9FAFB;
+            --bg-alt: #FFFFFF;
+            --border-color: #E5E7EB;
+            --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #3B82F6, #10B981); }
+        .hover-scale { transition: transform 0.3s ease; }
+        .hover-scale:hover { transform: scale(1.05); }
+        .job-table-row { transition: background-color 0.2s ease; }
+        .job-table-row:hover { background-color: #F3F4F6; }
+        .membership-card { transition: all 0.3s ease; }
+        .membership-card:hover { transform: translateY(-5px); box-shadow: var(--card-shadow); }
+        .referral-section { background: #F1F5F9; border-radius: 12px; padding: 1.5rem; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { background: white; margin: 15% auto; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center">
+    <div class="container mx-auto px-4 py-8 max-w-5xl bg-white rounded-2xl shadow-xl my-8">
+        <!-- Landing Page Section -->
+        <div id="landing-page" class="page-section active">
+            <div class="text-center py-12 gradient-bg rounded-2xl text-white">
+                <h1 class="text-4xl md:text-5xl font-bold mb-4">EarnEasy - Click, Refer & Earn!</h1>
+                <p class="text-lg md:text-xl max-w-2xl mx-auto">Join our platform to earn money by clicking ads, referring friends, and upgrading your membership for more rewards!</p>
+            </div>
+            <div class="mt-12 max-w-3xl mx-auto">
+                <h2 class="text-2xl font-semibold text-gray-800 text-center mb-8">How It Works</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md hover-scale">
+                        <p class="text-3xl mb-4">📝</p>
+                        <h3 class="text-lg font-medium">Sign Up</h3>
+                        <p class="text-gray-600">Create your account in seconds.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md hover-scale">
+                        <p class="text-3xl mb-4">💻</p>
+                        <h3 class="text-lg font-medium">Click Ads</h3>
+                        <p class="text-gray-600">Complete tasks to earn rewards.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md hover-scale">
+                        <p class="text-3xl mb-4">🤝</p>
+                        <h3 class="text-lg font-medium">Refer Friends</h3>
+                        <p class="text-gray-600">Earn from your referrals' activities.</p>
+                    </div>
+                </div>
+                <div class="text-center mt-12">
+                    <button id="show-signup-btn" class="btn bg-green-500 text-white px-8 py-3 rounded-lg hover:bg-green-600">Get Started</button>
+                    <button id="show-login-btn" class="btn bg-gray-600 text-white px-8 py-3 rounded-lg hover:bg-gray-700 ml-4">Login</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authentication Section -->
+        <div id="auth-page" class="page-section hidden">
+            <h2 id="auth-title" class="text-3xl font-bold text-center mb-8">Login</h2>
+            <div id="auth-error" class="bg-red-100 text-red-700 p-4 rounded-lg mb-6 hidden"></div>
+            <form id="auth-form" class="max-w-md mx-auto">
+                <div class="mb-6">
+                    <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                    <input type="email" id="email" class="mt-1 block w-full p-3 border rounded-lg" required placeholder="you@example.com">
+                </div>
+                <div class="mb-6">
+                    <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input type="password" id="password" class="mt-1 block w-full p-3 border rounded-lg" required placeholder="Enter your password">
+                </div>
+                <button type="submit" id="auth-submit-btn" class="btn w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600">Login</button>
+            </form>
+            <p class="text-center mt-6">
+                <span id="login-prompt">Don't have an account? <a href="#" id="toggle-to-signup" class="text-blue-500 hover:underline">Sign Up Now</a></span>
+                <span id="signup-prompt" class="hidden">Already have an account? <a href="#" id="toggle-to-login" class="text-blue-500 hover:underline">Login Here</a></span>
+            </p>
+            <button id="back-to-landing-btn" class="btn w-full bg-gray-500 text-white p-3 rounded-lg mt-4 hover:bg-gray-600">Back to Home</button>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-page" class="page-section hidden">
+            <h2 class="text-3xl font-bold text-center mb-8">Your Dashboard</h2>
+            <div id="global-notification" class="p-4 rounded-lg mb-6 hidden"></div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <p class="text-gray-600">Welcome</p>
+                    <p class="text-xl font-semibold" id="user-email-display"></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <p class="text-gray-600">Total Clicks</p>
+                    <p class="text-xl font-semibold" id="total-clicks-display">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <p class="text-gray-600">Total Earnings</p>
+                    <p class="text-xl font-semibold" id="total-earnings-display">$0.00</p>
+                </div>
+            </div>
+            <div class="referral-section mb-8">
+                <h3 class="text-xl font-semibold mb-4">Referral Program</h3>
+                <p class="text-gray-600 mb-4">Share your referral link and earn 10% of your referrals' earnings!</p>
+                <div class="flex items-center">
+                    <input type="text" id="referral-link" class="flex-grow p-3 border rounded-l-lg" readonly>
+                    <button id="copy-referral-btn" class="btn bg-blue-500 text-white p-3 rounded-r-lg hover:bg-blue-600">Copy</button>
+                </div>
+            </div>
+            <div class="membership-section mb-8">
+                <h3 class="text-xl font-semibold mb-4">Membership Plans</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="membership-card bg-white p-6 rounded-lg shadow-md text-center">
+                        <h4 class="text-lg font-semibold">Free</h4>
+                        <p class="text-2xl font-bold">$0</p>
+                        <p class="text-gray-600">5 Ads/Day</p>
+                        <button class="btn bg-blue-500 text-white p-2 mt-4 rounded-lg change-plan" data-plan="free">Select Free</button>
+                    </div>
+                    <div class="membership-card bg-white p-6 rounded-lg shadow-md text-center">
+                        <h4 class="text-lg font-semibold">Pro</h4>
+                        <p class="text-2xl font-bold">$10</p>
+                        <p class="text-gray-600">15 Ads/Day</p>
+                        <button class="btn bg-blue-500 text-white p-2 mt-4 rounded-lg change-plan" data-plan="pro">Upgrade to Pro</button>
+                    </div>
+                    <div class="membership-card bg-white p-6 rounded-lg shadow-md text-center">
+                        <h4 class="text-lg font-semibold">Premium</h4>
+                        <p class="text-2xl font-bold">$30</p>
+                        <p class="text-gray-600">50 Ads/Day</p>
+                        <button class="btn bg-blue-500 text-white p-2 mt-4 rounded-lg change-plan" data-plan="premium">Upgrade to Premium</button>
+                    </div>
+                </div>
+            </div>
+            <div class="available-jobs-container">
+                <h3 class="text-xl font-semibold mb-4">Available Click Jobs</h3>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="job-table-header grid grid-cols-4 gap-4 font-semibold text-gray-600">
+                        <div>Task Title</div>
+                        <div class="text-right">Reward</div>
+                        <div class="text-center">Posted</div>
+                        <div class="text-right">Action</div>
+                    </div>
+                    <div id="jobs-list"></div>
+                    <p id="no-jobs-message" class="text-center text-gray-600 mt-4 hidden">No jobs available right now.</p>
+                </div>
+            </div>
+            <div class="flex justify-between mt-8">
+                <button id="show-withdraw-page-btn" class="btn bg-yellow-500 text-white p-3 rounded-lg hover:bg-yellow-600">Request Withdrawal</button>
+                <button id="logout-btn" class="btn bg-gray-500 text-white p-3 rounded-lg hover:bg-gray-600">Logout</button>
+            </div>
+        </div>
+
+        <!-- Withdrawal Page Section -->
+        <div id="withdraw-page" class="page-section hidden">
+            <h2 class="text-3xl font-bold text-center mb-8">Request Withdrawal</h2>
+            <div id="withdraw-error" class="bg-red-100 text-red-700 p-4 rounded-lg mb-6 hidden"></div>
+            <div id="withdraw-success" class="bg-green-100 text-green-700 p-4 rounded-lg mb-6 hidden"></div>
+            <div class="balance-info text-center mb-6">
+                Your balance: <strong id="withdrawable-balance-display">$0.00</strong>
+            </div>
+            <form id="withdraw-form" class="max-w-md mx-auto">
+                <div class="mb-6">
+                    <label for="withdraw-amount" class="block text-sm font-medium text-gray-700">Amount (USD)</label>
+                    <input type="number" id="withdraw-amount" step="0.01" min="1" class="mt-1 block w-full p-3 border rounded-lg" required placeholder="e.g., 1.50">
+                </div>
+                <div class="mb-6">
+                    <label for="payment-method" class="block text-sm font-medium text-gray-700">Payment Method</label>
+                    <select id="payment-method" class="mt-1 block w-full p-3 border rounded-lg" required>
+                        <option value="Easypaisa">Easypaisa</option>
+                        <option value="JazzCash">JazzCash</option>
+                    </select>
+                </div>
+                <div class="mb-6">
+                    <label for="account-number" class="block text-sm font-medium text-gray-700">Account Number</label>
+                    <input type="text" id="account-number" class="mt-1 block w-full p-3 border rounded-lg" required placeholder="Your Easypaisa/JazzCash Number">
+                </div>
+                <button type="submit" id="submit-withdraw-request-btn" class="btn w-full bg-green-500 text-white p-3 rounded-lg hover:bg-green-600">Submit Request</button>
+            </form>
+            <p class="text-center text-sm text-gray-600 mt-4">Minimum withdrawal is $1. Processed within 24-48 hours.</p>
+            <button id="back-to-dashboard-btn" class="btn w-full bg-gray-500 text-white p-3 rounded-lg mt-4 hover:bg-gray-600">Back to Dashboard</button>
+            <div class="request-history-container mt-12">
+                <h3 class="text-xl font-semibold text-center mb-4">Withdrawal History</h3>
+                <div id="withdrawal-history-list" class="bg-gray-50 p-4 rounded-lg"></div>
+            </div>
+        </div>
+
+        <!-- Payment Modal for Membership Upgrade -->
+        <div id="payment-modal" class="modal">
+            <div class="modal-content">
+                <h3 class="text-xl font-semibold mb-4">Complete Your Membership Upgrade</h3>
+                <form id="payment-form">
+                    <div class="mb-6">
+                        <label for="payment-plan" class="block text-sm font-medium text-gray-700">Selected Plan</label>
+                        <input type="text" id="payment-plan" class="mt-1 block w-full p-3 border rounded-lg" readonly>
+                    </div>
+                    <div class="mb-6">
+                        <label for="payment-amount" class="block text-sm font-medium text-gray-700">Amount (USD)</label>
+                        <input type="text" id="payment-amount" class="mt-1 block w-full p-3 border rounded-lg" readonly>
+                    </div>
+                    <div class="mb-6">
+                        <label for="payment-method-select" class="block text-sm font-medium text-gray-700">Payment Method</label>
+                        <select id="payment-method-select" class="mt-1 block w-full p-3 border rounded-lg" required>
+                            <option value="Easypaisa">Easypaisa</option>
+                            <option value="JazzCash">JazzCash</option>
+                        </select>
+                    </div>
+                    <div class="mb-6">
+                        <label for="payment-account-number" class="block text-sm font-medium text-gray-700">Account Number</label>
+                        <input type="text" id="payment-account-number" class="mt-1 block w-full p-3 border rounded-lg" required placeholder="Your Easypaisa/JazzCash Number">
+                    </div>
+                    <div id="payment-error" class="bg-red-100 text-red-700 p-4 rounded-lg mb-6 hidden"></div>
+                    <button type="submit" id="submit-payment-btn" class="btn w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600">Confirm Payment</button>
+                    <button type="button" id="cancel-payment-btn" class="btn w-full bg-gray-500 text-white p-3 rounded-lg mt-2 hover:bg-gray-600">Cancel</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCrzml_yegiJClKDTPwdKasHCHxf4vZt4Q",
+            authDomain: "daily-job-click.firebaseapp.com",
+            projectId: "daily-job-click",
+            storageBucket: "daily-job-click.appspot.com",
+            messagingSenderId: "987428953867",
+            appId: "1:987428953867:android:021c425b8378733958cc0e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        const landingPage = document.getElementById('landing-page');
+        const authPage = document.getElementById('auth-page');
+        const dashboardPage = document.getElementById('dashboard-page');
+        const withdrawPage = document.getElementById('withdraw-page');
+        const showSignupBtn = document.getElementById('show-signup-btn');
+        const showLoginBtn = document.getElementById('show-login-btn');
+        const backToLandingBtn = document.getElementById('back-to-landing-btn');
+        const authTitle = document.getElementById('auth-title');
+        const authForm = document.getElementById('auth-form');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        const authError = document.getElementById('auth-error');
+        const loginPrompt = document.getElementById('login-prompt');
+        const signupPrompt = document.getElementById('signup-prompt');
+        const toggleToSignup = document.getElementById('toggle-to-signup');
+        const toggleToLogin = document.getElementById('toggle-to-login');
+        const userEmailDisplay = document.getElementById('user-email-display');
+        const totalClicksDisplay = document.getElementById('total-clicks-display');
+        const totalEarningsDisplay = document.getElementById('total-earnings-display');
+        const jobsListDiv = document.getElementById('jobs-list');
+        const noJobsMessage = document.getElementById('no-jobs-message');
+        const globalNotification = document.getElementById('global-notification');
+        const logoutBtn = document.getElementById('logout-btn');
+        const showWithdrawPageBtn = document.getElementById('show-withdraw-page-btn');
+        const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
+        const withdrawForm = document.getElementById('withdraw-form');
+        const withdrawAmountInput = document.getElementById('withdraw-amount');
+        const paymentMethodSelect = document.getElementById('payment-method');
+        const accountNumberInput = document.getElementById('account-number');
+        const submitWithdrawRequestBtn = document.getElementById('submit-withdraw-request-btn');
+        const withdrawableBalanceDisplay = document.getElementById('withdrawable-balance-display');
+        const withdrawError = document.getElementById('withdraw-error');
+        const withdrawSuccess = document.getElementById('withdraw-success');
+        const withdrawalHistoryList = document.getElementById('withdrawal-history-list');
+        const referralLinkInput = document.getElementById('referral-link');
+        const copyReferralBtn = document.getElementById('copy-referral-btn');
+        const changePlanButtons = document.querySelectorAll('.change-plan');
+        const paymentModal = document.getElementById('payment-modal');
+        const paymentForm = document.getElementById('payment-form');
+        const paymentPlanInput = document.getElementById('payment-plan');
+        const paymentAmountInput = document.getElementById('payment-amount');
+        const paymentMethodSelectModal = document.getElementById('payment-method-select');
+        const paymentAccountNumberInput = document.getElementById('payment-account-number');
+        const submitPaymentBtn = document.getElementById('submit-payment-btn');
+        const cancelPaymentBtn = document.getElementById('cancel-payment-btn');
+        const paymentError = document.getElementById('payment-error');
+
+        let currentAuthMode = 'login';
+        let currentUserData = null;
+        let availableAdLinks = [];
+        let jobCooldownIntervals = {};
+        const MIN_WITHDRAWAL_AMOUNT = 1;
+        const MEMBERSHIP_TIERS = {
+            free: { maxAds: 5, cost: 0 },
+            pro: { maxAds: 15, cost: 10 },
+            premium: { maxAds: 50, cost: 30 }
+        };
+        const REFERRAL_PERCENTAGE = 0.1;
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page-section').forEach(section => section.classList.add('hidden'));
+            document.getElementById(pageId).classList.remove('hidden');
+            hideAllNotifications();
+        }
+
+        function hideAllNotifications() {
+            [authError, globalNotification, withdrawError, withdrawSuccess, paymentError].forEach(el => el?.classList.add('hidden'));
+        }
+
+        function setupAuthForm(mode) {
+            currentAuthMode = mode;
+            authForm.reset();
+            authTitle.textContent = mode === 'signup' ? 'Create Your Account' : 'Login';
+            authSubmitBtn.textContent = mode === 'signup' ? 'Sign Up' : 'Login';
+            loginPrompt.classList.toggle('hidden', mode === 'signup');
+            signupPrompt.classList.toggle('hidden', mode === 'login');
+        }
+
+        function showPaymentModal(plan) {
+            paymentPlanInput.value = plan.charAt(0).toUpperCase() + plan.slice(1);
+            paymentAmountInput.value = `$${MEMBERSHIP_TIERS[plan].cost.toFixed(2)}`;
+            paymentForm.dataset.plan = plan;
+            paymentModal.style.display = 'block';
+            paymentError.classList.add('hidden');
+            paymentForm.reset();
+            paymentPlanInput.value = plan.charAt(0).toUpperCase() + plan.slice(1);
+            paymentAmountInput.value = `$${MEMBERSHIP_TIERS[plan].cost.toFixed(2)}`;
+            // Hide payment fields for Free plan
+            const paymentFields = document.querySelectorAll('#payment-form .mb-6:nth-child(3), #payment-form .mb-6:nth-child(4)');
+            paymentFields.forEach(field => field.style.display = plan === 'free' ? 'none' : 'block');
+            submitPaymentBtn.textContent = plan === 'free' ? 'Confirm Downgrade' : 'Confirm Payment';
+        }
+
+        function closePaymentModal() {
+            paymentModal.style.display = 'none';
+            paymentForm.reset();
+        }
+
+        showSignupBtn.addEventListener('click', () => { setupAuthForm('signup'); showPage('auth-page'); });
+        showLoginBtn.addEventListener('click', () => { setupAuthForm('login'); showPage('auth-page'); });
+        backToLandingBtn.addEventListener('click', () => showPage('landing-page'));
+        toggleToSignup.addEventListener('click', e => { e.preventDefault(); setupAuthForm('signup'); });
+        toggleToLogin.addEventListener('click', e => { e.preventDefault(); setupAuthForm('login'); });
+
+        copyReferralBtn.addEventListener('click', () => {
+            referralLinkInput.select();
+            document.execCommand('copy');
+            showGlobalNotification('Referral link copied!', 'success');
+        });
+
+        cancelPaymentBtn.addEventListener('click', closePaymentModal);
+
+        changePlanButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const plan = btn.dataset.plan;
+                if (!auth.currentUser) {
+                    showGlobalNotification('Please log in to change plan.', 'error');
+                    return;
+                }
+                showPaymentModal(plan);
+            });
+        });
+
+        paymentForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const plan = paymentForm.dataset.plan;
+            const paymentMethod = paymentMethodSelectModal.value;
+            const accountNumber = paymentAccountNumberInput.value.trim();
+
+            if (plan !== 'free' && !accountNumber) {
+                paymentError.textContent = 'Please enter your account number.';
+                paymentError.classList.remove('hidden');
+                return;
+            }
+
+            submitPaymentBtn.disabled = true;
+            submitPaymentBtn.textContent = plan === 'free' ? 'Processing...' : 'Processing Payment...';
+
+            try {
+                if (plan === 'free') {
+                    // Directly update to Free plan without payment
+                    await db.collection('users').doc(auth.currentUser.uid).update({
+                        membership: plan,
+                        lastMembershipUpgrade: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } else {
+                    // Simulate payment processing for Pro/Premium plans
+                    const paymentRequest = {
+                        userId: auth.currentUser.uid,
+                        plan,
+                        amount: MEMBERSHIP_TIERS[plan].cost,
+                        paymentMethod,
+                        accountNumber,
+                        requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        status: 'pending'
+                    };
+                    await db.collection('membership_payments').add(paymentRequest);
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+                    await db.collection('users').doc(auth.currentUser.uid).update({
+                        membership: plan,
+                        lastMembershipUpgrade: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+
+                currentUserData.membership = plan;
+                updateMembershipUI();
+                await loadAvailableAdLinks();
+                renderAvailableJobs();
+                showGlobalNotification(`Changed to ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan!`, 'success');
+                closePaymentModal();
+            } catch (error) {
+                console.error('Error processing plan change:', error);
+                paymentError.textContent = plan === 'free' ? 'Could not downgrade to Free plan. Try again.' : 'Could not process payment. Try again.';
+                paymentError.classList.remove('hidden');
+            } finally {
+                submitPaymentBtn.disabled = false;
+                submitPaymentBtn.textContent = plan === 'free' ? 'Confirm Downgrade' : 'Confirm Payment';
+            }
+        });
+
+        function updateMembershipUI() {
+            const currentPlan = currentUserData?.membership || 'free';
+            document.querySelectorAll('.change-plan').forEach(btn => {
+                const plan = btn.dataset.plan;
+                btn.disabled = plan === currentPlan;
+                btn.textContent = plan === currentPlan ? 'Current Plan' : 
+                                 plan === 'free' ? 'Downgrade to Free' : 
+                                 `Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}`;
+                btn.classList.toggle('bg-gray-300', plan === currentPlan);
+                btn.classList.toggle('text-gray-700', plan === currentPlan);
+                btn.classList.toggle('bg-blue-500', plan !== currentPlan);
+                btn.classList.toggle('text-white', plan !== currentPlan);
+            });
+        }
+
+        auth.onAuthStateChanged(async user => {
+            if (user) {
+                await loadUserData(user.uid);
+                await loadAvailableAdLinks();
+                updateDashboardUI();
+                renderAvailableJobs();
+                updateReferralLink();
+                updateMembershipUI();
+                showPage('dashboard-page');
+            } else {
+                currentUserData = null;
+                availableAdLinks = [];
+                Object.values(jobCooldownIntervals).forEach(clearInterval);
+                jobCooldownIntervals = {};
+                jobsListDiv.innerHTML = '';
+                noJobsMessage.classList.add('hidden');
+                updateDashboardUI();
+                showPage('landing-page');
+                authForm.reset();
+            }
+        });
+
+        async function loadUserData(userId) {
+            try {
+                const userDoc = await db.collection('users').doc(userId).get();
+                if (userDoc.exists) {
+                    currentUserData = userDoc.data();
+                    currentUserData.totalClicks = currentUserData.totalClicks || 0;
+                    currentUserData.pointsEarned = currentUserData.pointsEarned || 0;
+                    currentUserData.linkClickTimestamps = currentUserData.linkClickTimestamps || {};
+                    currentUserData.referrals = currentUserData.referrals || [];
+                    currentUserData.membership = currentUserData.membership || 'free';
+                    currentUserData.referralCode = currentUserData.referralCode || generateReferralCode();
+                } else {
+                    currentUserData = {
+                        email: auth.currentUser.email,
+                        totalClicks: 0,
+                        pointsEarned: 0,
+                        linkClickTimestamps: {},
+                        referrals: [],
+                        membership: 'free',
+                        referralCode: generateReferralCode(),
+                        referredBy: new URLSearchParams(window.location.search).get('ref') || null
+                    };
+                    await db.collection('users').doc(userId).set(currentUserData);
+                    if (currentUserData.referredBy) {
+                        await db.collection('users').where('referralCode', '==', currentUserData.referredBy)
+                            .get().then(snapshot => {
+                                if (!snapshot.empty) {
+                                    const referrerDoc = snapshot.docs[0];
+                                    db.runTransaction(async transaction => {
+                                        transaction.update(referrerDoc.ref, {
+                                            referrals: firebase.firestore.FieldValue.arrayUnion(userId)
+                                        });
+                                    });
+                                }
+                            });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                displayAuthError('Could not load your data. Please try logging out and in again.');
+            }
+        }
+
+        function generateReferralCode() {
+            return Math.random().toString(36).substr(2, 8).toUpperCase();
+        }
+
+        function updateReferralLink() {
+            if (currentUserData && referralLinkInput) {
+                referralLinkInput.value = `${window.location.origin}?ref=${currentUserData.referralCode}`;
+            }
+        }
+
+        async function loadAvailableAdLinks() {
+            availableAdLinks = [];
+            noJobsMessage.classList.add('hidden');
+            try {
+                const maxAds = MEMBERSHIP_TIERS[currentUserData?.membership || 'free'].maxAds;
+                const snapshot = await db.collection('ad_links')
+                    .where('isActive', '==', true)
+                    .orderBy('createdAt', 'desc')
+                    .limit(maxAds)
+                    .get();
+                availableAdLinks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (availableAdLinks.length === 0) {
+                    noJobsMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error loading ad links:', error);
+                noJobsMessage.classList.remove('hidden');
+                noJobsMessage.textContent = 'Error loading jobs. Please try again.';
+            }
+        }
+
+        function updateDashboardUI() {
+            const earnings = currentUserData?.pointsEarned || 0;
+            const clicks = currentUserData?.totalClicks || 0;
+            userEmailDisplay.textContent = currentUserData?.email || '';
+            totalClicksDisplay.textContent = clicks;
+            totalEarningsDisplay.textContent = `$${earnings.toFixed(2)}`;
+            withdrawableBalanceDisplay.textContent = `$${earnings.toFixed(2)}`;
+        }
+
+        function renderAvailableJobs() {
+            jobsListDiv.innerHTML = '';
+            if (availableAdLinks.length === 0) {
+                noJobsMessage.classList.remove('hidden');
+                return;
+            }
+            noJobsMessage.classList.add('hidden');
+            availableAdLinks.forEach(link => {
+                const jobRow = document.createElement('div');
+                jobRow.classList.add('job-table-row', 'grid', 'grid-cols-4', 'gap-4', 'py-4', 'border-b');
+                jobRow.id = `job-${link.id}`;
+                jobRow.innerHTML = `
+                    <div class="font-medium text-gray-800">${link.title || 'Untitled Job'}</div>
+                    <div class="text-right text-green-600 font-semibold">$${(Number(link.reward) || 0.01).toFixed(2)}</div>
+                    <div class="text-center text-gray-600">${timeAgo(link.createdAt)}</div>
+                    <div class="text-right">
+                        <button class="btn bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" 
+                                data-link-id="${link.id}" 
+                                data-link-url="${link.url}" 
+                                data-link-reward="${Number(link.reward) || 0.01}">Click & Earn</button>
+                    </div>`;
+                jobsListDiv.appendChild(jobRow);
+                const clickButton = jobRow.querySelector('.btn');
+                checkAndSetButtonCooldown(link.id, clickButton);
+            });
+        }
+
+        function timeAgo(timestamp) {
+            if (!timestamp || !timestamp.seconds) return 'Recently';
+            const now = new Date();
+            const secondsPast = Math.floor((now - timestamp.seconds * 1000) / 1000);
+            if (secondsPast < 60) return `${secondsPast}s ago`;
+            if (secondsPast < 3600) return `${Math.floor(secondsPast / 60)}m ago`;
+            if (secondsPast <= 86400) return `${Math.floor(secondsPast / 3600)}h ago`;
+            const days = Math.floor(secondsPast / 86400);
+            if (days < 7) return `${days}d ago`;
+            return new Date(timestamp.seconds * 1000).toLocaleDateString();
+        }
+
+        function checkAndSetButtonCooldown(linkId, button) {
+            if (!currentUserData?.linkClickTimestamps) {
+                button.disabled = false;
+                button.textContent = 'Click & Earn';
+                return true;
+            }
+            const lastClickTimestamp = currentUserData.linkClickTimestamps[linkId];
+            if (lastClickTimestamp?.seconds) {
+                const lastClickTime = lastClickTimestamp.seconds * 1000;
+                const now = Date.now();
+                const twentyFourHoursInMs = 24 * 60 * 60 * 1000;
+                const unlockTime = lastClickTime + twentyFourHoursInMs;
+                if (now - lastClickTime < twentyFourHoursInMs) {
+                    button.disabled = true;
+                    startCooldownTimer(button, unlockTime - now, linkId, unlockTime);
+                    return false;
+                }
+            }
+            button.disabled = false;
+            button.textContent = 'Click & Earn';
+            if (jobCooldownIntervals[linkId]) {
+                clearInterval(jobCooldownIntervals[linkId]);
+                delete jobCooldownIntervals[linkId];
+            }
+            return true;
+        }
+
+        function startCooldownTimer(button, initialDuration, linkId, targetUnlockTime) {
+            if (jobCooldownIntervals[linkId]) clearInterval(jobCooldownIntervals[linkId]);
+            button.disabled = true;
+            const updateTimer = () => {
+                const now = Date.now();
+                const timeLeft = targetUnlockTime - now;
+                if (timeLeft <= 0) {
+                    clearInterval(jobCooldownIntervals[linkId]);
+                    delete jobCooldownIntervals[linkId];
+                    button.disabled = false;
+                    button.textContent = 'Click & Earn';
+                    return;
+                }
+                const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+                const minutes = Math.floor((timeLeft / (1000 * 60)) % 60);
+                const seconds = Math.floor((timeLeft / 1000) % 60);
+                button.textContent = `Wait: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            };
+            updateTimer();
+            jobCooldownIntervals[linkId] = setInterval(updateTimer, 1000);
+        }
+
+        async function handleJobClick(event) {
+            const button = event.target;
+            const linkId = button.dataset.linkId;
+            const linkUrl = button.dataset.linkUrl;
+            const linkReward = parseFloat(button.dataset.linkReward);
+
+            if (!linkUrl) {
+                showGlobalNotification('Invalid job link.', 'error');
+                button.disabled = true;
+                button.textContent = 'Error';
+                return;
+            }
+
+            if (button.disabled && button.textContent.startsWith('Wait:')) {
+                showGlobalNotification('Please wait for the cooldown.', 'warning');
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = 'Processing...';
+
+            try {
+                const userId = auth.currentUser.uid;
+                const userDocRef = db.collection('users').doc(userId);
+
+                await db.runTransaction(async transaction => {
+                    const userDoc = await transaction.get(userDocRef);
+                    if (!userDoc.exists) throw new Error('User not found.');
+
+                    const userData = userDoc.data();
+                    const currentClicks = Number(userData.totalClicks) || 0;
+                    const currentEarnings = Number(userData.pointsEarned) || 0;
+                    const timestamps = userData.linkClickTimestamps || {};
+
+                    if (timestamps[linkId]?.seconds) {
+                        const lastClickTime = timestamps[linkId].seconds * 1000;
+                        const now = Date.now();
+                        if (now - lastClickTime < 24 * 60 * 60 * 1000) {
+                            throw new Error('Cooldown active.');
+                        }
+                    }
+
+                    const newClicks = currentClicks + 1;
+                    const newEarnings = currentEarnings + linkReward;
+                    const updatedTimestamps = {
+                        ...timestamps,
+                        [linkId]: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    transaction.update(userDocRef, {
+                        totalClicks: newClicks,
+                        pointsEarned: newEarnings,
+                        linkClickTimestamps: updatedTimestamps
+                    });
+
+                    if (userData.referredBy) {
+                        const referrerSnapshot = await db.collection('users')
+                            .where('referralCode', '==', userData.referredBy).get();
+                        if (!snapshot.empty) {
+                            const referrerDoc = referrerSnapshot.docs[0];
+                            const referrerData = referrerDoc.data();
+                            const referrerEarnings = Number(referrerData.pointsEarned) || 0;
+                            const referralBonus = linkReward * REFERRAL_PERCENTAGE;
+                            transaction.update(referrerDoc.ref, {
+                                pointsEarned: referrerEarnings + referralBonus
+                            });
+                        }
+                    }
+                });
+
+                currentUserData.totalClicks = (currentUserData.totalClicks || 0) + 1;
+                currentUserData.pointsEarned = (currentUserData.pointsEarned || 0) + linkReward;
+                currentUserData.linkClickTimestamps[linkId] = { seconds: Math.floor(Date.now() / 1000) };
+
+                updateDashboardUI();
+                checkAndSetButtonCooldown(linkId, button);
+                showGlobalNotification(`Earned $${linkReward.toFixed(2)}!`, 'success');
+                window.open(linkUrl, '_blank');
+            } catch (error) {
+                console.error('Error processing job click:', error);
+                if (error.message === 'Cooldown active.') {
+                    showGlobalNotification('Job is on cooldown.', 'warning');
+                    checkAndSetButtonCooldown(linkId, button);
+                } else {
+                    showGlobalNotification('Error processing click. Try again.', 'error');
+                    button.disabled = false;
+                    button.textContent = 'Click & Earn';
+                }
+            }
+        }
+
+        authForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            authSubmitBtn.disabled = true;
+            authSubmitBtn.textContent = 'Processing...';
+            try {
+                if (currentAuthMode === 'signup') {
+                    await auth.createUserWithEmailAndPassword(email, password);
+                } else {
+                    await auth.signInWithEmailAndPassword(email, password);
+                }
+            } catch (error) {
+                console.error('Auth error:', error);
+                displayAuthError(error.message);
+                authSubmitBtn.disabled = false;
+                authSubmitBtn.textContent = currentAuthMode === 'signup' ? 'Sign Up' : 'Login';
+            }
+        });
+
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await auth.signOut();
+            } catch (error) {
+                console.error('Logout error:', error);
+                showGlobalNotification('Error logging out.', 'error');
+            }
+        });
+
+        function displayAuthError(message) {
+            authError.textContent = message;
+            authError.classList.remove('hidden');
+        }
+
+        function showGlobalNotification(message, type = 'info') {
+            globalNotification.textContent = message;
+            globalNotification.className = `p-4 rounded-lg mb-6 ${type === 'success' ? 'bg-green-100 text-green-700' : type === 'error' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`;
+            globalNotification.classList.remove('hidden');
+            setTimeout(() => globalNotification.classList.add('hidden'), 5000);
+        }
+
+        jobsListDiv.addEventListener('click', e => {
+            if (e.target.classList.contains('btn')) {
+                handleJobClick(e);
+            }
+        });
+
+        showWithdrawPageBtn.addEventListener('click', () => {
+            if (!currentUserData) {
+                showGlobalNotification('Please log in to request withdrawal.', 'warning');
+                return;
+            }
+            updateDashboardUI();
+            loadWithdrawalHistory();
+            showPage('withdraw-page');
+        });
+
+        backToDashboardBtn.addEventListener('click', () => showPage('dashboard-page'));
+
+        withdrawForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (!currentUserData || !auth.currentUser) {
+                displayWithdrawError('You must be logged in.');
+                return;
+            }
+            const amount = parseFloat(withdrawAmountInput.value);
+            const paymentMethod = paymentMethodSelect.value;
+            const accountNumber = accountNumberInput.value.trim();
+
+            if (isNaN(amount) || amount < MIN_WITHDRAWAL_AMOUNT) {
+                displayWithdrawError(`Minimum withdrawal is $${MIN_WITHDRAWAL_AMOUNT.toFixed(2)}.`);
+                return;
+            }
+            if (amount > (currentUserData.pointsEarned || 0)) {
+                displayWithdrawError('Insufficient balance.');
+                return;
+            }
+            if (!accountNumber) {
+                displayWithdrawError('Please enter your account number.');
+                return;
+            }
+
+            submitWithdrawRequestBtn.disabled = true;
+            submitWithdrawRequestBtn.textContent = 'Submitting...';
+            hideWithdrawMessages();
+
+            try {
+                await db.collection('withdrawal_requests').add({
+                    userId: auth.currentUser.uid,
+                    userEmail: currentUserData.email,
+                    amount,
+                    paymentMethod,
+                    accountNumber,
+                    requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    status: 'pending'
+                });
+                displayWithdrawSuccess('Withdrawal request submitted! Awaiting admin approval.');
+                withdrawForm.reset();
+                loadWithdrawalHistory();
+            } catch (error) {
+                console.error('Error submitting withdrawal request:', error);
+                displayWithdrawError('Could not submit request. Try again.');
+            } finally {
+                submitWithdrawRequestBtn.disabled = false;
+                submitWithdrawRequestBtn.textContent = 'Submit Request';
+            }
+        });
+
+        async function loadWithdrawalHistory() {
+            if (!auth.currentUser || !withdrawalHistoryList) return;
+            withdrawalHistoryList.innerHTML = '<p class="text-center text-gray-600">Loading...</p>';
+            try {
+                const snapshot = await db.collection('withdrawal_requests')
+                    .where('userId', '==', auth.currentUser.uid)
+                    .orderBy('requestedAt', 'desc')
+                    .limit(10)
+                    .get();
+                if (snapshot.empty) {
+                    withdrawalHistoryList.innerHTML = '<p class="text-center text-gray-600">No withdrawal requests yet.</p>';
+                    return;
+                }
+                let html = '';
+                snapshot.forEach(doc => {
+                    const req = doc.data();
+                    const date = req.requestedAt ? new Date(req.requestedAt.seconds * 1000).toLocaleDateString() : 'N/A';
+                    html += `
+                        <div class="grid grid-cols-4 gap-4 py-3 border-b text-sm">
+                            <span>${date}</span>
+                            <span class="font-medium">$${req.amount.toFixed(2)}</span>
+                            <span>${req.accountNumber} (${req.paymentMethod})</span>
+                            <span class="text-right ${req.status === 'pending' ? 'text-yellow-600' : req.status === 'processed' ? 'text-green-600' : 'text-red-600'}">
+                                ${req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                            </span>
+                        </div>`;
+                });
+                withdrawalHistoryList.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading withdrawal history:', error);
+                withdrawalHistoryList.innerHTML = '<p class="text-center text-gray-600">Error loading history.</p>';
+            }
+        }
+
+        function displayWithdrawError(message) {
+            withdrawError.textContent = message;
+            withdrawError.classList.remove('hidden');
+            withdrawSuccess.classList.add('hidden');
+        }
+
+        function displayWithdrawSuccess(message) {
+            withdrawSuccess.textContent = message;
+            withdrawSuccess.classList.remove('hidden');
+            withdrawError.classList.add('hidden');
+        }
+
+        function hideWithdrawMessages() {
+            withdrawError.classList.add('hidden');
+            withdrawSuccess.classList.add('hidden');
+        }
+
+        updateDashboardUI();
+        showPage('landing-page');
+    </script>
+</body>
+</html>
