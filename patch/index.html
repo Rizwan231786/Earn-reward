@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patch — Builders Community</title>
+<meta name="description" content="Patch: showcase projects, join communities, discover tools, and compete in the monthly Patch Championship.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn only-mobile" id="menuBtn" aria-label="Menu">☰</button>
+  <a href="#/" class="brand"><span class="brand-mark">⧉</span> Patch</a>
+  <div class="search">
+    <input id="searchInput" type="search" placeholder="Search posts, projects, tools, people…" autocomplete="off">
+  </div>
+  <div class="top-actions">
+    <a href="#/new" class="btn btn-primary hide-xs">＋ Create</a>
+    <a href="#/messages" class="icon-btn" title="Messages" aria-label="Messages">✉<span class="dot" id="msgDot" hidden></span></a>
+    <a href="#/notifications" class="icon-btn" title="Notifications" aria-label="Notifications">🔔<span class="badge-count" id="notifCount" hidden></span></a>
+    <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">🌓</button>
+    <div class="user-menu" id="userMenu"></div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <nav class="nav">
+      <a href="#/" data-nav="feed">🏠 Home</a>
+      <a href="#/communities" data-nav="communities">👥 Communities</a>
+      <a href="#/vault" data-nav="vault">🗄️ Project Vault</a>
+      <a href="#/championship" data-nav="championship">🏆 Championship</a>
+      <a href="#/tools" data-nav="tools">🧰 Tools & Offers</a>
+      <a href="#/builders" data-nav="builders">💼 Opportunities</a>
+      <a href="#/messages" data-nav="messages">✉️ Messages</a>
+      <a href="#/saved" data-nav="saved">🔖 Saved</a>
+    </nav>
+    <div class="side-section">
+      <div class="side-title">Your communities</div>
+      <div id="myCommunities"></div>
+    </div>
+    <div class="side-foot">
+      <button class="link-btn" id="resetBtn">Reset demo data</button>
+    </div>
+  </aside>
+  <main id="app" class="main" tabindex="-1"></main>
+</div>
+
+<div class="modal-backdrop" id="modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
