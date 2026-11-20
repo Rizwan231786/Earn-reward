@@ -4,9 +4,11 @@
 (() => {
 'use strict';
 
-const STORAGE_KEY = 'patch.v1';
+const STORAGE_KEY = 'patch.v2';
 const DAY = 864e5;
-const COMMUNITY_MIN_AGE_DAYS = 3;
+const DEFAULT_MIN_AGE_DAYS = 3;
+const REPORT_REASONS = ['Spam or self-promotion', 'Harassment or hate', 'Scam or malicious link', 'Stolen / plagiarised project', 'Off-topic', 'Other'];
+const ROLE_LABEL = { admin: 'Admin', moderator: 'Moderator', user: 'Member' };
 const CHAMP_CATEGORIES = [
   { id: 'ai-agent', name: 'AI Agent Builder', icon: '🤖' },
   { id: 'game', name: 'Game Developer', icon: '🎮' },
@@ -60,8 +62,10 @@ function seed() {
     ['u7', 'Noah Kim', 'noah', 'Battle royale grinder and part-time modder.', ['Lua', 'Blender'], 90, false],
   ].map(([id, name, handle, bio, skills, ageDays, openToWork], i) => ({
     id, name, handle, bio, skills, openToWork, isPublic: true, color: COLORS[i % COLORS.length],
-    joinedAt: t - ageDays * DAY, following: [], links: {},
+    joinedAt: t - ageDays * DAY, following: [], links: {}, role: 'user', banned: false, verified: false,
   }));
+  users[0].role = 'admin'; users[1].role = 'moderator';
+  users[0].verified = users[1].verified = users[2].verified = true;
   users[0].following = ['u2', 'u3'];
   users[1].following = ['u1', 'u3', 'u4'];
   users[2].following = ['u1'];
@@ -72,7 +76,7 @@ function seed() {
     ['c3', 'webdev', 'Web Development', '🌐', 'Frontend, backend, deployment and the stuff in between.', ['Include a link or code when asking for help', 'No self-promo without context'], ['u1', 'u4', 'u6']],
     ['c4', 'battle-royale', 'Battle Royale Squad', '🪂', 'Find squadmates, share wins, talk loadouts.', ['Be respectful in LFG posts', 'No cheats or exploits'], ['u7', 'u2', 'u5']],
     ['c5', 'automation', 'Automation', '⚙️', 'n8n, Zapier, scripts and bots that save hours.', ['Share workflows as JSON when you can'], ['u3', 'u5', 'u6']],
-  ].map(([id, slug, name, icon, desc, rules, members], i) => ({ id, slug, name, icon, desc, rules, members, createdBy: members[0], createdAt: t - (200 - i * 20) * DAY }));
+  ].map(([id, slug, name, icon, desc, rules, members], i) => ({ id, slug, name, icon, desc, rules, members, mods: id === 'c4' ? ['u2'] : [], createdBy: members[0], createdAt: t - (200 - i * 20) * DAY }));
 
   const projects = [
     { id: 'p1', ownerId: 'u2', name: 'Lanternfall', tagline: 'A cozy roguelite where your lantern is your health bar.', desc: 'Explore a drowned city with a lantern that dims as you take damage. Built in Godot 4.', status: 'beta', visibility: 'closed', tech: ['Godot', 'GDScript', 'Aseprite'], demo: 'https://example.com/lanternfall', repo: '', lookingFor: 'Composer for the soundtrack',
@@ -114,7 +118,8 @@ function seed() {
     ['Vercel Hobby', 'https://vercel.com', 'Hosting & Cloud', 'Free tier for hosting frontend projects.', false],
     ['Cloud credits for students', 'https://education.github.com/pack', 'Hosting & Cloud', 'Free cloud credits and dev tools with the GitHub Student Pack.', true],
     ['Bruno', 'https://www.usebruno.com', 'Dev Tools', 'Offline-first API client; collections live in your repo.', false],
-  ].map(([name, url, category, desc, isOffer], i) => ({ id: uid(), name, url, category, desc, isOffer, expires: isOffer ? new Date(t + 30 * DAY).toISOString().slice(0, 10) : '', addedBy: users[i % users.length].id, upvotes: users.slice(0, (i * 3) % 6 + 1).map((u) => u.id), createdAt: t - i * 2 * DAY }));
+  ].map(([name, url, category, desc, isOffer], i) => ({ id: uid(), name, url, category, desc, isOffer, expires: isOffer ? new Date(t + 30 * DAY).toISOString().slice(0, 10) : '', addedBy: users[i % users.length].id, upvotes: users.slice(0, (i * 3) % 6 + 1).map((u) => u.id), status: 'approved', createdAt: t - i * 2 * DAY }));
+  tools.push({ id: uid(), name: 'FreeGPU Finder', url: 'https://example.com/freegpu', category: 'Hosting & Cloud', desc: 'Tracks free GPU credits across cloud providers.', isOffer: true, expires: '', addedBy: 'u5', upvotes: ['u5'], status: 'pending', createdAt: t - 3600e3 });
 
   // Championship history: every month from January of last year up to last month.
   const champ = { submissions: [], votes: [], winners: [], closed: [] };
@@ -156,14 +161,20 @@ function seed() {
     { id: uid(), from: 'u6', to: 'u1', body: 'Saw ShopSprint got some views from Patch. A client reached out already!', createdAt: t - 26 * 3600e3, read: true },
   ];
 
-  return { version: 1, currentUserId: 'u1', users, communities, posts, projects, tools, champ, notifications, messages };
+  const reports = [
+    { id: uid(), kind: 'post', targetId: posts[4].id, reason: 'Off-topic', note: 'Not really a tool request, more of a gaming question.', reporterId: 'u6', status: 'open', createdAt: t - 5 * 3600e3 },
+    { id: uid(), kind: 'comment', targetId: `${posts[0].id}|${posts[0].comments[0].id}`, reason: 'Spam or self-promotion', note: '', reporterId: 'u4', status: 'dismissed', handledBy: 'u2', handledAt: t - 3600e3, createdAt: t - 2 * 3600e3 },
+  ];
+  const settings = { communityMinAgeDays: 3, toolApproval: true, announcement: '🎉 Patch beta is open — add your first project to the Vault!' };
+  const auditLog = [{ id: uid(), actorId: 'u2', action: 'dismissed report', detail: 'comment — Spam or self-promotion', createdAt: t - 3600e3 }];
+  return { version: 2, currentUserId: 'u1', users, communities, posts, projects, tools, champ, notifications, messages, reports, settings, audit: auditLog };
 }
 
 /* ---------- store ---------- */
 let db;
 function load() {
   try { db = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { db = null; }
-  if (!db || db.version !== 1) { db = seed(); save(); }
+  if (!db || db.version !== 2) { db = seed(); save(); }
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
@@ -178,6 +189,15 @@ const communityBySlug = (s) => db.communities.find((c) => c.slug === s);
 const project = (id) => db.projects.find((p) => p.id === id);
 const post = (id) => db.posts.find((p) => p.id === id);
 const accountAgeDays = (u) => (now() - u.joinedAt) / DAY;
+const minAge = () => db.settings?.communityMinAgeDays ?? DEFAULT_MIN_AGE_DAYS;
+const isAdmin = (u = me()) => !!u && u.role === 'admin';
+const isStaff = (u = me()) => !!u && (u.role === 'admin' || u.role === 'moderator');
+// Site staff moderate everywhere; a community's creator and its moderators moderate inside it.
+const canModerate = (c, u = me()) => isStaff(u) || (!!u && !!c && !u.banned && (c.createdBy === u.id || (c.mods || []).includes(u.id)));
+function audit(action, detail = '') {
+  db.audit.unshift({ id: uid(), actorId: me()?.id, action, detail, createdAt: now() });
+  if (db.audit.length > 500) db.audit.length = 500;
+}
 
 function notify(userId, text, link) {
   const m = me();
@@ -186,9 +206,10 @@ function notify(userId, text, link) {
 }
 
 function requireLogin() {
-  if (me()) return true;
-  openAuth();
-  return false;
+  const m = me();
+  if (!m) { openAuth(); return false; }
+  if (m.banned) { toast('Your account is suspended'); return false; }
+  return true;
 }
 
 /* ---------- rendering helpers ---------- */
@@ -201,6 +222,9 @@ function champBadges(u) {
   const wins = db.champ.winners.filter((w) => w.userId === u.id).length;
   const yearly = yearlyTitles().filter((y) => y.userId === u.id).length;
   let s = '';
+  if (u.verified) s += ' <span class="verified" title="Verified builder">✔</span>';
+  if (u.role === 'admin') s += ' <span class="pill pill-accent" title="Patch admin">🛡️ Admin</span>';
+  else if (u.role === 'moderator') s += ' <span class="pill pill-good" title="Patch moderator">🛡️ Mod</span>';
   if (yearly) s += ` <span class="champ-badge" title="Yearly champion">👑 ${yearly}</span>`;
   if (wins) s += ` <span class="champ-badge" title="Monthly championship trophies">🏆 ${wins}</span>`;
   return s;
@@ -233,6 +257,7 @@ function postCard(p, { full = false } = {}) {
       ${avatar(a, 'sm')} ${userLink(a)} · <span>${ago(p.createdAt)}</span>
       <span class="pill pill-accent">${type.icon} ${type.label}</span>
       ${p.solved ? '<span class="pill pill-good">✓ Solved</span>' : ''}
+      ${p.pinned ? '<span class="pill pill-gold">📌 Pinned</span>' : ''}
     </div>
     <div class="post-title"><a href="#/post/${p.id}">${esc(p.title)}</a></div>
     ${body}
@@ -246,7 +271,9 @@ function postCard(p, { full = false } = {}) {
       <button class="act ${saved ? 'on' : ''}" data-act="save" data-id="${p.id}" aria-pressed="${!!saved}">${saved ? '🔖 Saved' : '🔖 Save'}</button>
       <button class="act" data-act="share" data-id="${p.id}">↗ Share</button>
       ${m && (m.id === p.authorId) && p.type === 'question' ? `<button class="act" data-act="solve" data-id="${p.id}">${p.solved ? 'Mark unsolved' : '✓ Mark solved'}</button>` : ''}
-      ${m && m.id === p.authorId ? `<button class="act" data-act="delete-post" data-id="${p.id}">🗑 Delete</button>` : ''}
+      ${m && m.id !== p.authorId ? `<button class="act" data-act="report" data-kind="post" data-id="${p.id}">⚑ Report</button>` : ''}
+      ${canModerate(c) ? `<button class="act" data-act="pin-post" data-id="${p.id}">📌 ${p.pinned ? 'Unpin' : 'Pin'}</button>` : ''}
+      ${m && (m.id === p.authorId || canModerate(c)) ? `<button class="act" data-act="delete-post" data-id="${p.id}">🗑 ${m.id === p.authorId ? 'Delete' : 'Remove'}</button>` : ''}
     </div>
   </article>`;
 }
@@ -256,6 +283,9 @@ function feedFilters(state) {
   <div class="chips" style="margin-bottom:14px"><button class="chip ${!state.type ? 'active' : ''}" data-type="">All</button>${Object.entries(POST_TYPES).map(([k, v]) => `<button class="chip ${state.type === k ? 'active' : ''}" data-type="${k}">${v.icon} ${v.label}</button>`).join('')}</div>`;
 }
 function sortPosts(list, sort) {
+  return sortRaw(list, sort).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+}
+function sortRaw(list, sort) {
   const score = (p) => p.likes.length * 2 + p.comments.length * 3;
   if (sort === 'new') return list.sort((a, b) => b.createdAt - a.createdAt);
   if (sort === 'top') return list.sort((a, b) => score(b) - score(a));
@@ -321,7 +351,7 @@ function viewPost(id) {
     <div class="card">
       <h3>${plural(p.comments.length, 'comment')}</h3>
       ${m ? `<form id="commentForm" class="field"><textarea name="body" placeholder="${p.type === 'question' ? 'Know the fix? Share it…' : 'Add a comment…'}" required maxlength="4000" style="min-height:80px"></textarea><div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn btn-primary btn-sm">Comment</button></div></form>` : `<p class="muted"><button class="link-btn" data-act="login">Log in</button> to comment.</p>`}
-      <div>${p.comments.map((c) => { const a = user(c.authorId); return `<div class="comment">${avatar(a, 'sm')}<div style="flex:1;min-width:0"><div class="small">${userLink(a)} <span class="muted">· ${ago(c.createdAt)}</span></div><div class="post-body">${esc(c.body)}</div></div></div>`; }).join('') || '<div class="muted">No comments yet — be the first.</div>'}</div>
+      <div>${p.comments.map((c) => { const a = user(c.authorId); return `<div class="comment">${avatar(a, 'sm')}<div style="flex:1;min-width:0"><div class="small">${userLink(a)} <span class="muted">· ${ago(c.createdAt)}</span></div><div class="post-body">${esc(c.body)}</div>${commentActions(p, c)}</div></div>`; }).join('') || '<div class="muted">No comments yet — be the first.</div>'}</div>
     </div>
   </div></div>`;
 }
@@ -438,7 +468,9 @@ function viewCommunity(slug) {
       ${list.length ? list.map((p) => postCard(p)).join('') : '<div class="card empty">No posts yet. Start the first discussion!</div>'}
     </div>
     <aside class="rail">
-      <div class="card"><h3>About</h3><p class="small">${esc(c.desc)}</p><div class="small muted">Created ${ago(c.createdAt)} by ${userLink(creator)}</div></div>
+      <div class="card"><h3>About</h3><p class="small">${esc(c.desc)}</p><div class="small muted">Created ${ago(c.createdAt)} by ${userLink(creator)}</div>
+        ${(c.mods || []).length ? `<div class="small" style="margin-top:8px"><strong>Moderators:</strong> ${c.mods.map((id) => userLink(user(id))).join(', ')}</div>` : ''}
+        ${canModerate(c) ? `<button class="btn btn-sm" style="margin-top:10px" data-act="edit-community" data-id="${c.id}">⚙ Manage community</button>` : ''}</div>
       <div class="card"><h3>Rules</h3><ol class="small" style="padding-left:18px;margin:0">${c.rules.map((r) => `<li style="margin-bottom:4px">${esc(r)}</li>`).join('') || '<li>Be kind.</li>'}</ol></div>
       <div class="card hide-narrow"><h3>Members</h3><div class="row">${c.members.slice(0, 16).map((id) => avatar(user(id), 'sm')).join('')}</div></div>
     </aside>
@@ -447,9 +479,9 @@ function viewCommunity(slug) {
 function openNewCommunity() {
   if (!requireLogin()) return;
   const m = me(), age = accountAgeDays(m);
-  if (age < COMMUNITY_MIN_AGE_DAYS) {
-    const left = Math.ceil((COMMUNITY_MIN_AGE_DAYS - age) * 24);
-    return modal(`<h2>Almost there!</h2><p>To keep Patch free of spam accounts, new members can create a community after <strong>${COMMUNITY_MIN_AGE_DAYS} days</strong>.</p><div class="notice">Your account is ${age < 1 ? 'less than a day' : plural(Math.floor(age), 'day')} old. You can create a community in about ${plural(left, 'hour')}.</div><p class="small muted" style="margin-top:10px">Meanwhile you can join communities, post, and add projects to the Vault.</p>`);
+  if (age < minAge()) {
+    const left = Math.ceil((minAge() - age) * 24);
+    return modal(`<h2>Almost there!</h2><p>To keep Patch free of spam accounts, new members can create a community after <strong>${minAge()} days</strong>.</p><div class="notice">Your account is ${age < 1 ? 'less than a day' : plural(Math.floor(age), 'day')} old. You can create a community in about ${plural(left, 'hour')}.</div><p class="small muted" style="margin-top:10px">Meanwhile you can join communities, post, and add projects to the Vault.</p>`);
   }
   modal(`<h2>Create a community</h2>
     <form id="commForm">
@@ -467,7 +499,7 @@ function openNewCommunity() {
     e.preventDefault();
     const slug = f.slug.value.trim();
     if (communityBySlug(slug)) return toast('That URL name is taken');
-    const c = { id: uid(), slug, name: f.name.value.trim(), icon: f.icon.value.trim() || '✨', desc: f.desc.value.trim(), rules: f.rules.value.split('\n').map((s) => s.trim()).filter(Boolean), members: [m.id], createdBy: m.id, createdAt: now() };
+    const c = { id: uid(), slug, name: f.name.value.trim(), icon: f.icon.value.trim() || '✨', desc: f.desc.value.trim(), rules: f.rules.value.split('\n').map((s) => s.trim()).filter(Boolean), members: [m.id], mods: [], createdBy: m.id, createdAt: now() };
     db.communities.push(c); save(); closeModal(); toast('Community created!'); location.hash = `#/c/${c.slug}`;
   };
 }
@@ -476,7 +508,7 @@ function openNewCommunity() {
 const toolState = { cat: '', sort: 'top' };
 function viewTools() {
   const m = me();
-  let list = db.tools.slice();
+  let list = db.tools.filter((t) => t.status !== 'pending');
   if (toolState.cat === 'offers') list = list.filter((t) => t.isOffer);
   else if (toolState.cat) list = list.filter((t) => t.category === toolState.cat);
   list.sort(toolState.sort === 'new' ? (a, b) => b.createdAt - a.createdAt : (a, b) => b.upvotes.length - a.upvotes.length);
@@ -489,7 +521,7 @@ function viewTools() {
       return `<div class="card"><div class="row between"><strong>${esc(t.name)}</strong><span class="tag">${esc(t.category)}</span></div>
         ${t.isOffer ? `<div style="margin-top:4px"><span class="pill pill-warn">🎁 Offer${t.expires ? ` · until ${esc(t.expires)}` : ''}</span></div>` : ''}
         <p class="small" style="margin-top:6px">${esc(t.desc)}</p>
-        <div class="row between"><span class="small muted">by ${userLink(user(t.addedBy))}</span><span class="row"><button class="btn btn-sm ${up ? 'btn-primary' : ''}" data-act="upvote-tool" data-id="${t.id}">▲ ${t.upvotes.length}</button>${url ? `<a class="btn btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>` : ''}</span></div></div>`;
+        <div class="row between"><span class="small muted">by ${userLink(user(t.addedBy))}</span><span class="row">${isStaff() ? `<button class="btn btn-sm" data-act="remove-tool" data-id="${t.id}" title="Remove (staff)">🗑</button>` : ''}<button class="btn btn-sm ${up ? 'btn-primary' : ''}" data-act="upvote-tool" data-id="${t.id}">▲ ${t.upvotes.length}</button>${url ? `<a class="btn btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>` : ''}</span></div></div>`;
     }).join('') || '<div class="card empty">No tools in this category yet.</div>'}</div>
   </div>`;
 }
@@ -512,8 +544,10 @@ function openNewTool() {
   f.onsubmit = (e) => {
     e.preventDefault();
     if (!safeUrl(f.url.value)) return toast('Enter a valid http(s) link');
-    db.tools.unshift({ id: uid(), name: f.name.value.trim(), url: f.url.value.trim(), category: f.category.value, desc: f.desc.value.trim(), isOffer: f.isOffer.checked, expires: f.isOffer.checked ? f.expires.value : '', addedBy: me().id, upvotes: [me().id], createdAt: now() });
-    save(); closeModal(); toolState.sort = 'new'; render(); toast('Thanks for sharing!');
+    const needsReview = db.settings.toolApproval && !isStaff();
+    db.tools.unshift({ id: uid(), name: f.name.value.trim(), url: f.url.value.trim(), category: f.category.value, desc: f.desc.value.trim(), isOffer: f.isOffer.checked, expires: f.isOffer.checked ? f.expires.value : '', addedBy: me().id, upvotes: [me().id], createdAt: now(), status: needsReview ? 'pending' : 'approved' });
+    if (needsReview) db.users.filter((u) => isStaff(u)).forEach((u) => notify(u.id, `New tool waiting for approval: ${f.name.value.trim()}`, '#/admin'));
+    save(); closeModal(); toolState.sort = 'new'; render(); toast(needsReview ? 'Submitted! It appears once a moderator approves it.' : 'Thanks for sharing!');
   };
 }
 
@@ -554,7 +588,7 @@ function viewProject(id) {
         <h1 style="margin-top:10px">${esc(p.name)}</h1>
         <p class="muted">${esc(p.tagline)}</p>
         <div class="row small">${avatar(o, 'sm')} ${userLink(o)} <span class="muted">· started ${ago(p.createdAt)}</span></div>
-        <div class="row" style="margin-top:12px">${demo ? `<a class="btn btn-primary" href="${esc(demo)}" target="_blank" rel="noopener noreferrer">▶ Live demo</a>` : ''}${repo ? `<a class="btn" href="${esc(repo)}" target="_blank" rel="noopener noreferrer">⌥ Source code</a>` : ''}${m && !mine ? `<a class="btn" href="#/messages/${esc(o.handle)}">✉ Contact builder</a>` : ''}</div>
+        <div class="row" style="margin-top:12px">${demo ? `<a class="btn btn-primary" href="${esc(demo)}" target="_blank" rel="noopener noreferrer">▶ Live demo</a>` : ''}${repo ? `<a class="btn" href="${esc(repo)}" target="_blank" rel="noopener noreferrer">⌥ Source code</a>` : ''}${m && !mine ? `<a class="btn" href="#/messages/${esc(o.handle)}">✉ Contact builder</a><button class="btn" data-act="report" data-kind="project" data-id="${p.id}">⚑ Report</button>` : ''}</div>
       </div>
       <div class="card"><h3>About</h3><div class="post-body">${esc(p.desc)}</div>${p.lookingFor ? `<div class="notice info" style="margin-top:10px">🤝 Looking for: ${esc(p.lookingFor)}</div>` : ''}</div>
       <div class="card">
@@ -653,13 +687,14 @@ function yearlyTitles() {
 const champState = { cat: CHAMP_CATEGORIES[0].id, tab: 'vote' };
 function eligibility(u) {
   if (!u) return { ok: false, why: 'Log in to take part.' };
-  if (accountAgeDays(u) < COMMUNITY_MIN_AGE_DAYS) return { ok: false, why: `Accounts must be at least ${COMMUNITY_MIN_AGE_DAYS} days old to submit.` };
+  if (u.banned) return { ok: false, why: 'Suspended accounts cannot enter.' };
+  if (accountAgeDays(u) < minAge()) return { ok: false, why: `Accounts must be at least ${minAge()} days old to submit.` };
   if (!db.projects.some((p) => p.ownerId === u.id)) return { ok: false, why: 'Add a project to the Vault first — entries are Vault projects.' };
   return { ok: true };
 }
 function tally(mk, cat) {
   return db.champ.submissions.filter((s) => s.month === mk && s.category === cat)
-    .map((s) => ({ ...s, votes: db.champ.votes.filter((v) => v.submissionId === s.id).length }))
+    .map((s) => ({ ...s, votes: db.champ.votes.filter((v) => v.submissionId === s.id && !user(v.voterId)?.banned).length }))  // votes from suspended accounts don't count
     .sort((a, b) => b.votes - a.votes || a.createdAt - b.createdAt);
 }
 function viewChampionship() {
@@ -684,10 +719,10 @@ function viewChampionship() {
             <div class="small muted">${avatar(o, 'sm')} ${userLink(o)}</div>
             <p class="small" style="margin-top:6px">${esc(s.note || p?.tagline || '')}</p>
             <div class="chips">${(p?.tech || []).slice(0, 4).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div></div>
-          <div>${closed ? '' : own ? '<span class="small muted">Your entry</span>' : `<button class="btn btn-sm ${mine ? 'btn-primary' : ''}" data-act="champ-vote" data-id="${s.id}">${mine ? '✓ Voted' : 'Vote'}</button>`}</div>
+          <div class="row" style="flex-direction:column;align-items:flex-end">${isStaff() && !closed ? `<button class="btn btn-sm btn-danger" data-act="disqualify" data-id="${s.id}">Disqualify</button>` : ''}${closed ? '' : own ? '<span class="small muted">Your entry</span>' : `<button class="btn btn-sm ${mine ? 'btn-primary' : ''}" data-act="champ-vote" data-id="${s.id}">${mine ? '✓ Voted' : 'Vote'}</button>`}</div>
         </div></div>`;
       }).join('') || '<div class="card empty">No entries yet in this category. Be the first to submit!</div>'}
-      ${m && !closed ? `<div class="card" style="margin-top:16px"><div class="row between"><div><strong>Close ${esc(monthLabel(mk))} voting</strong><div class="small muted">Demo admin action — in production this runs automatically on the last day of the month.</div></div><button class="btn btn-sm" data-act="close-month">Crown champions</button></div></div>` : ''}`;
+      ${isAdmin() && !closed ? `<div class="card" style="margin-top:16px"><div class="row between"><div><strong>Close ${esc(monthLabel(mk))} voting</strong><div class="small muted">🛡️ Admin only. In production this also runs automatically at month end.</div></div><button class="btn btn-sm" data-act="close-month">Crown champions</button></div></div>` : ''}`;
   } else if (champState.tab === 'winners') {
     const months = [...new Set(db.champ.winners.map((w) => w.month))].sort().reverse();
     body = months.map((mo) => `<div class="card"><h3>${esc(monthLabel(mo))} champions</h3><div class="grid-3">${CHAMP_CATEGORIES.map((c) => {
@@ -732,6 +767,7 @@ function openSubmitEntry() {
   };
 }
 function closeMonth() {
+  if (!isAdmin()) return;
   const mk = monthKey();
   if (!confirm(`Close voting for ${monthLabel(mk)} and crown the champions?`)) return;
   CHAMP_CATEGORIES.forEach((c) => {
@@ -742,6 +778,7 @@ function closeMonth() {
     notify(top.userId, `🏆 You are the ${monthLabel(mk)} ${c.name} champion!`, `#/u/${user(top.userId).handle}`);
   });
   db.champ.closed.push(mk);
+  audit('crowned champions', monthLabel(mk));
   save(); champState.tab = 'winners'; render(); toast('Champions crowned!');
 }
 
@@ -770,9 +807,9 @@ function viewProfile(handle) {
       <div style="flex:1;min-width:0"><h1 style="margin:0">${esc(u.name)}${champBadges(u)}</h1><div class="muted">@${esc(u.handle)} · joined ${ago(u.joinedAt)}</div>
         <p style="margin-top:8px">${esc(u.bio)}</p>
         <div class="chips">${u.skills.map((s) => `<span class="tag">${esc(s)}</span>`).join('')}</div>
-        <div class="row small" style="margin-top:10px"><strong>${followers.length}</strong> followers · <strong>${u.following.length}</strong> following · <strong>${wins.length}</strong> trophies ${u.openToWork ? '<span class="pill pill-good">💼 Open to work & collabs</span>' : ''} ${!u.isPublic ? '<span class="pill pill-warn">🔒 Private profile</span>' : ''}</div>
+        <div class="row small" style="margin-top:10px"><strong>${followers.length}</strong> followers · <strong>${u.following.length}</strong> following · <strong>${wins.length}</strong> trophies ${u.openToWork ? '<span class="pill pill-good">💼 Open to work & collabs</span>' : ''} ${!u.isPublic ? '<span class="pill pill-warn">🔒 Private profile</span>' : ''} ${u.banned ? '<span class="pill pill-warn">⛔ Suspended</span>' : ''}</div>
       </div>
-      <div class="row">${isMe ? '<button class="btn" data-act="edit-profile">Edit profile</button>' : m ? `<button class="btn ${following ? '' : 'btn-primary'}" data-act="follow" data-id="${u.id}">${following ? 'Following ✓' : '＋ Follow'}</button><a class="btn" href="#/messages/${esc(u.handle)}">✉ Message</a>` : ''}</div>
+      <div class="row">${isMe ? '<button class="btn" data-act="edit-profile">Edit profile</button>' : m ? `<button class="btn ${following ? '' : 'btn-primary'}" data-act="follow" data-id="${u.id}">${following ? 'Following ✓' : '＋ Follow'}</button><a class="btn" href="#/messages/${esc(u.handle)}">✉ Message</a><button class="btn" data-act="report" data-kind="user" data-id="${u.id}" title="Report user">⚑</button>` : ''}</div>
     </div></div>
     <div class="tabs" style="margin-top:14px">${[['posts', `Posts (${posts.length})`], ['projects', `Projects (${projects.length})`], ['trophies', `🏆 Trophy room (${wins.length})`]].map(([k, l]) => `<button class="tab ${profState.tab === k ? 'active' : ''}" data-ptab="${k}">${l}</button>`).join('')}</div>
     ${tab}
@@ -873,6 +910,217 @@ function viewSearch(q) {
   </div>`;
 }
 
+/* ---------- moderation helpers ---------- */
+function commentActions(p, cm) {
+  const m = me(); if (!m) return '';
+  const key = `${p.id}|${cm.id}`;
+  let s = '';
+  if (m.id !== cm.authorId) s += `<button class="act" data-act="report" data-kind="comment" data-id="${key}">⚑ Report</button>`;
+  if (m.id === cm.authorId || canModerate(community(p.communityId))) s += `<button class="act" data-act="delete-comment" data-id="${key}">🗑 ${m.id === cm.authorId ? 'Delete' : 'Remove'}</button>`;
+  return s ? `<div class="actions" style="margin-top:2px">${s}</div>` : '';
+}
+function banner() {
+  const m = me();
+  let s = '';
+  if (db.settings.announcement) s += `<div class="announce">📣 ${esc(db.settings.announcement)}</div>`;
+  if (m?.banned) s += '<div class="notice" style="margin-bottom:14px">⛔ Your account is suspended. You can browse Patch, but posting, commenting, messaging and voting are disabled.</div>';
+  return s;
+}
+function removeProject(id) {
+  db.projects = db.projects.filter((p) => p.id !== id);
+  db.posts.forEach((p) => { if (p.projectId === id) p.projectId = ''; });
+  const subIds = db.champ.submissions.filter((x) => x.projectId === id && !db.champ.closed.includes(x.month)).map((x) => x.id);
+  db.champ.submissions = db.champ.submissions.filter((x) => !subIds.includes(x.id));
+  db.champ.votes = db.champ.votes.filter((v) => !subIds.includes(v.submissionId));
+}
+function removeTarget(r) {
+  if (r.kind === 'post') {
+    const p = post(r.targetId);
+    if (p) { db.posts = db.posts.filter((x) => x !== p); notify(p.authorId, `Your post "${p.title.slice(0, 50)}" was removed by moderators (${r.reason}).`, '#/notifications'); }
+  } else if (r.kind === 'comment') {
+    const [pid, cid] = r.targetId.split('|'); const p = post(pid); const cm = p && p.comments.find((x) => x.id === cid);
+    if (cm) { p.comments = p.comments.filter((x) => x !== cm); notify(cm.authorId, `Your comment on "${p.title.slice(0, 50)}" was removed by moderators (${r.reason}).`, `#/post/${p.id}`); }
+  } else if (r.kind === 'user') {
+    const u = user(r.targetId);
+    if (u && u.role !== 'admin') { u.banned = true; notify(u.id, 'Your account has been suspended by moderators.', '#/notifications'); }
+  } else if (r.kind === 'project') {
+    const p = project(r.targetId);
+    if (p) { removeProject(p.id); notify(p.ownerId, `Your project "${p.name}" was removed from the Vault by moderators (${r.reason}).`, '#/notifications'); }
+  }
+}
+function reportTarget(r) {
+  if (r.kind === 'post') { const p = post(r.targetId); return p ? `📝 Post: <a class="link" href="#/post/${p.id}">${esc(p.title)}</a> by ${userLink(user(p.authorId))}` : '<span class="muted">Post (already removed)</span>'; }
+  if (r.kind === 'comment') {
+    const [pid, cid] = r.targetId.split('|'); const p = post(pid); const cm = p && p.comments.find((x) => x.id === cid);
+    return cm ? `💬 Comment by ${userLink(user(cm.authorId))} on <a class="link" href="#/post/${p.id}">${esc(p.title)}</a><div class="quote">${esc(cm.body.slice(0, 200))}</div>` : '<span class="muted">Comment (already removed)</span>';
+  }
+  if (r.kind === 'user') { const u = user(r.targetId); return u ? `👤 User: ${userLink(u)} <span class="muted">@${esc(u.handle)}</span> ${u.banned ? '<span class="pill pill-warn">Suspended</span>' : ''}` : '<span class="muted">User (deleted)</span>'; }
+  if (r.kind === 'project') { const p = project(r.targetId); return p ? `🗄️ Project: <a class="link" href="#/vault/${p.id}">${esc(p.name)}</a> by ${userLink(user(p.ownerId))}` : '<span class="muted">Project (already removed)</span>'; }
+  return '';
+}
+function openReport(kind, id) {
+  modal(`<h2>Report ${esc(kind)}</h2><p class="small muted">Reports are private and reviewed by Patch moderators.</p><form id="repForm">
+    <div class="field">${REPORT_REASONS.map((r, i) => `<label class="row" style="font-weight:500;margin-bottom:6px"><input type="radio" name="reason" value="${esc(r)}" ${i === 0 ? 'checked' : ''}> ${esc(r)}</label>`).join('')}</div>
+    <div class="field"><label for="rp-n">Details (optional)</label><textarea id="rp-n" name="note" maxlength="500" style="min-height:70px"></textarea></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn btn-danger">Submit report</button></div></form>`);
+  $('#repForm').onsubmit = (e) => {
+    e.preventDefault(); const f = e.target, m = me();
+    if (db.reports.some((r) => r.status === 'open' && r.kind === kind && r.targetId === id && r.reporterId === m.id)) { closeModal(); return toast('You already reported this'); }
+    db.reports.unshift({ id: uid(), kind, targetId: id, reason: f.reason.value, note: f.note.value.trim(), reporterId: m.id, status: 'open', createdAt: now() });
+    db.users.filter((u) => isStaff(u)).forEach((u) => notify(u.id, `New report: ${kind} — ${f.reason.value}`, '#/admin'));
+    save(); closeModal(); render(); toast('Thanks — moderators will review it');
+  };
+}
+function openEditCommunity(id) {
+  const c = community(id); if (!c || !canModerate(c)) return;
+  modal(`<h2>Manage p/${esc(c.slug)}</h2><form id="ecForm">
+    <div class="grid-2"><div class="field"><label for="ec-n">Name</label><input id="ec-n" type="text" name="name" maxlength="50" required value="${esc(c.name)}"></div>
+    <div class="field"><label for="ec-i">Icon (emoji)</label><input id="ec-i" type="text" name="icon" maxlength="4" value="${esc(c.icon)}"></div></div>
+    <div class="field"><label for="ec-d">Description</label><textarea id="ec-d" name="desc" maxlength="300" style="min-height:70px">${esc(c.desc)}</textarea></div>
+    <div class="field"><label for="ec-r">Rules (one per line)</label><textarea id="ec-r" name="rules" maxlength="1500" style="min-height:90px">${esc(c.rules.join('\n'))}</textarea></div>
+    <div class="field"><label for="ec-m">Community moderators</label><input id="ec-m" type="text" name="mods" value="${esc((c.mods || []).map((i) => user(i)?.handle).filter(Boolean).join(', '))}" placeholder="kavya, leo"><div class="hint">Usernames, comma separated. They can pin and remove posts and comments in this community.</div></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn btn-primary">Save</button></div></form>`);
+  $('#ecForm').onsubmit = (e) => {
+    e.preventDefault(); const f = e.target;
+    const handles = [...new Set(f.mods.value.split(',').map((x) => x.trim().replace(/^@/, '').toLowerCase()).filter(Boolean))];
+    const missing = handles.find((h) => !userByHandle(h));
+    if (missing) return toast(`Unknown user: @${missing}`);
+    Object.assign(c, { name: f.name.value.trim(), icon: f.icon.value.trim() || c.icon, desc: f.desc.value.trim(), rules: f.rules.value.split('\n').map((x) => x.trim()).filter(Boolean), mods: handles.map((h) => userByHandle(h).id) });
+    c.mods.forEach((uid2) => notify(uid2, `You are a moderator of p/${c.slug}`, `#/c/${c.slug}`));
+    audit('updated community', 'p/' + c.slug); save(); closeModal(); render(); toast('Community updated');
+  };
+}
+
+/* ---------- admin panel ---------- */
+const adminState = { tab: 'overview', q: '', rstatus: 'open' };
+const auditRow = (a) => { const u = user(a.actorId); return `<div class="notif">${u ? avatar(u, 'sm') : ''}<span style="flex:1;min-width:0"><strong>${esc(u?.name || 'System')}</strong> ${esc(a.action)} <span class="muted">${esc(a.detail || '')}</span><div class="small muted">${ago(a.createdAt)}</div></span></div>`; };
+function viewAdmin() {
+  const m = me();
+  if (!isStaff()) return '<div class="page single"><div class="card empty"><h2>🛡️ Staff only</h2><p>The admin panel is only available to Patch admins and moderators.</p><a class="btn" href="#/">Go home</a></div></div>';
+  const openReports = db.reports.filter((r) => r.status === 'open').length;
+  const pendingTools = db.tools.filter((t) => t.status === 'pending').length;
+  const tabs = [['overview', '📊 Overview'], ['reports', `⚑ Reports${openReports ? ` (${openReports})` : ''}`], ['content', '📝 Content'], ['tools', `🧰 Tools${pendingTools ? ` (${pendingTools})` : ''}`], ['championship', '🏆 Championship'],
+    ...(isAdmin() ? [['users', '👥 Users'], ['communities', '🏘️ Communities'], ['settings', '⚙️ Settings']] : []), ['audit', '📜 Audit log']];
+  if (!tabs.some(([k]) => k === adminState.tab)) adminState.tab = 'overview';
+  const t = adminState.tab, q = adminState.q.toLowerCase();
+  const search = (ph) => `<input type="text" id="adminQ" placeholder="${ph}" value="${esc(adminState.q)}" style="margin-bottom:12px" autocomplete="off">`;
+  let body = '';
+
+  if (t === 'overview') {
+    const weekAgo = now() - 7 * DAY, mk = monthKey();
+    const stats = [['Members', db.users.length], ['New this week', db.users.filter((u) => u.joinedAt > weekAgo).length], ['Posts', db.posts.length], ['Posts this week', db.posts.filter((p) => p.createdAt > weekAgo).length],
+      ['Communities', db.communities.length], ['Vault projects', db.projects.length], ['Open reports', openReports], ['Pending tools', pendingTools], ['Suspended', db.users.filter((u) => u.banned).length], [`${shortMonth(mk)} entries`, db.champ.submissions.filter((x) => x.month === mk).length]];
+    body = `<div class="stat-grid">${stats.map(([l, v]) => `<div class="card stat"><div class="stat-v">${v}</div><div class="small muted">${esc(l)}</div></div>`).join('')}</div>
+      <div class="grid-2" style="margin-top:14px">
+        <div class="card"><h3>Needs attention</h3>${openReports || pendingTools ? `<div class="row">${openReports ? `<button class="btn btn-sm btn-danger" data-atab="reports">Review ${plural(openReports, 'report')}</button>` : ''}${pendingTools ? `<button class="btn btn-sm" data-atab="tools">Approve ${plural(pendingTools, 'tool')}</button>` : ''}</div>` : '<p class="small muted">All clear 🎉 No open reports or pending tools.</p>'}</div>
+        <div class="card"><h3>Recent staff activity</h3>${db.audit.slice(0, 5).map(auditRow).join('') || '<p class="small muted">Nothing yet.</p>'}</div>
+      </div>`;
+  }
+
+  if (t === 'reports') {
+    const list = db.reports.filter((r) => adminState.rstatus === 'all' || r.status === adminState.rstatus).sort((a, b) => b.createdAt - a.createdAt);
+    body = `<div class="chips" style="margin-bottom:12px">${['open', 'resolved', 'dismissed', 'all'].map((x) => `<button class="chip ${adminState.rstatus === x ? 'active' : ''}" data-rstatus="${x}">${x[0].toUpperCase() + x.slice(1)}</button>`).join('')}</div>`
+      + (list.map((r) => `<div class="card"><div class="row between"><div class="row"><span class="pill pill-warn">⚑ ${esc(r.reason)}</span><span class="small muted">by ${userLink(user(r.reporterId))} · ${ago(r.createdAt)}</span></div><span class="pill ${r.status === 'open' ? 'pill-accent' : 'pill-good'}">${esc(r.status)}</span></div>
+        <div style="margin-top:8px">${reportTarget(r)}</div>
+        ${r.note ? `<p class="small muted" style="margin-top:6px">Reporter's note: “${esc(r.note)}”</p>` : ''}
+        ${r.status === 'open' ? `<div class="row" style="margin-top:10px"><button class="btn btn-sm btn-danger" data-act="report-remove" data-id="${r.id}">${r.kind === 'user' ? '⛔ Suspend user' : '🗑 Remove ' + esc(r.kind)}</button><button class="btn btn-sm" data-act="report-dismiss" data-id="${r.id}">Dismiss</button></div>`
+          : `<div class="small muted" style="margin-top:6px">${r.status === 'resolved' ? 'Actioned' : 'Dismissed'} by ${esc(user(r.handledBy)?.name || 'staff')}${r.handledAt ? ' · ' + ago(r.handledAt) : ''}</div>`}
+      </div>`).join('') || '<div class="card empty">No reports here. 🎉</div>');
+  }
+
+  if (t === 'content') {
+    const list = db.posts.filter((p) => !q || `${p.title} ${p.body} @${user(p.authorId)?.handle}`.toLowerCase().includes(q)).sort((a, b) => b.createdAt - a.createdAt).slice(0, 100);
+    body = search('Search posts by title, text or @author…') + `<div class="card table-wrap"><table class="table"><thead><tr><th>Post</th><th>Author</th><th>Community</th><th>Activity</th><th></th></tr></thead><tbody>${list.map((p) => {
+      const c = community(p.communityId);
+      return `<tr><td><a class="link" href="#/post/${p.id}">${esc(p.title.slice(0, 80))}</a>${p.pinned ? ' 📌' : ''}<div class="small muted">${esc(POST_TYPES[p.type]?.label || p.type)} · ${ago(p.createdAt)}</div></td><td>${userLink(user(p.authorId))}</td><td class="small">${c ? `p/${esc(c.slug)}` : '—'}</td><td class="small nowrap">♥ ${p.likes.length} · 💬 ${p.comments.length}</td>
+        <td><div class="row" style="flex-wrap:nowrap"><button class="btn btn-sm" data-act="pin-post" data-id="${p.id}">${p.pinned ? 'Unpin' : 'Pin'}</button><button class="btn btn-sm btn-danger" data-act="delete-post" data-id="${p.id}">Remove</button></div></td></tr>`;
+    }).join('') || '<tr><td colspan="5" class="muted">No posts match.</td></tr>'}</tbody></table></div>`;
+  }
+
+  if (t === 'tools') {
+    const pending = db.tools.filter((x) => x.status === 'pending'), live = db.tools.filter((x) => x.status !== 'pending');
+    body = `<div class="row between"><h3>Waiting for approval</h3><span class="small muted">Approval is ${db.settings.toolApproval ? 'ON' : 'OFF'}${isAdmin() ? ' — change in Settings' : ''}</span></div>
+      ${pending.map((x) => { const url = safeUrl(x.url); return `<div class="card"><div class="row between"><strong>${esc(x.name)}</strong><span class="tag">${esc(x.category)}</span></div>${x.isOffer ? '<span class="pill pill-warn">🎁 Offer</span>' : ''}<p class="small" style="margin-top:6px">${esc(x.desc)}</p><div class="small muted">${url ? `<a class="link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>` : esc(x.url)} · submitted by ${userLink(user(x.addedBy))} ${ago(x.createdAt)}</div><div class="row" style="margin-top:10px"><button class="btn btn-sm btn-primary" data-act="approve-tool" data-id="${x.id}">✓ Approve</button><button class="btn btn-sm btn-danger" data-act="reject-tool" data-id="${x.id}">Reject</button></div></div>`; }).join('') || '<div class="card empty small">No tools waiting.</div>'}
+      <h3 style="margin-top:18px">Live tools (${live.length})</h3>
+      <div class="card table-wrap"><table class="table"><tbody>${live.map((x) => `<tr><td><strong>${esc(x.name)}</strong><div class="small muted">${esc(x.category)}${x.isOffer ? ' · 🎁 offer' : ''}</div></td><td class="small">${userLink(user(x.addedBy))}</td><td class="small nowrap">▲ ${x.upvotes.length}</td><td><button class="btn btn-sm btn-danger" data-act="remove-tool" data-id="${x.id}">Remove</button></td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  if (t === 'championship') {
+    const mk = monthKey(), closed = db.champ.closed.includes(mk);
+    const entries = CHAMP_CATEGORIES.flatMap((c) => tally(mk, c.id));
+    const votes = db.champ.votes.filter((v) => v.month === mk);
+    const flagged = votes.filter((v) => { const u = user(v.voterId); return !u || u.banned || accountAgeDays(u) < minAge(); }).length;
+    body = `<div class="card"><div class="row between"><div><strong>${esc(monthLabel(mk))}</strong><div class="small muted">${closed ? 'Voting closed — champions crowned' : 'Voting open'} · ${plural(entries.length, 'entry')} · ${plural(votes.length, 'vote')}</div></div>${closed ? '<span class="pill pill-good">Closed</span>' : isAdmin() ? '<button class="btn btn-gold btn-sm" data-act="close-month">🏆 Close voting & crown champions</button>' : ''}</div>
+      ${flagged ? `<div class="notice" style="margin-top:10px">${plural(flagged, 'vote')} came from suspended or brand-new accounts. Votes from suspended accounts are excluded automatically.</div>` : ''}</div>
+      <div class="card table-wrap"><table class="table"><thead><tr><th>Entry</th><th>Category</th><th>Builder</th><th>Votes</th><th></th></tr></thead><tbody>${entries.map((x) => `<tr><td><a class="link" href="#/vault/${x.projectId}">${esc(project(x.projectId)?.name || 'Deleted project')}</a></td><td class="small">${catIcon(x.category)} ${esc(catName(x.category))}</td><td>${userLink(user(x.userId))}</td><td class="mono">${x.votes}</td><td>${closed ? '' : `<button class="btn btn-sm btn-danger" data-act="disqualify" data-id="${x.id}">Disqualify</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No entries yet.</td></tr>'}</tbody></table></div>`;
+  }
+
+  if (t === 'users') {
+    const list = db.users.filter((u) => !q || `${u.name} ${u.handle}`.toLowerCase().includes(q)).sort((a, b) => b.joinedAt - a.joinedAt);
+    body = search('Search members by name or username…') + `<div class="card table-wrap"><table class="table"><thead><tr><th>Member</th><th>Role</th><th>Joined</th><th>Posts</th><th>Reports</th><th>Status</th><th></th></tr></thead><tbody>${list.map((u) => {
+      const reportsAgainst = db.reports.filter((r) => (r.kind === 'user' && r.targetId === u.id) || (r.kind === 'post' && post(r.targetId)?.authorId === u.id)).length;
+      return `<tr><td><div class="row" style="flex-wrap:nowrap">${avatar(u, 'sm')}<div style="min-width:0">${userLink(u)}<div class="small muted">@${esc(u.handle)}</div></div></div></td>
+        <td><select data-role-for="${u.id}" ${u.id === m.id ? 'disabled title="You cannot change your own role"' : ''} style="width:auto;padding:5px 8px">${Object.entries(ROLE_LABEL).map(([k, l]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+        <td class="small nowrap">${ago(u.joinedAt)}</td><td class="small">${db.posts.filter((p) => p.authorId === u.id).length}</td><td class="small">${reportsAgainst}</td>
+        <td>${u.banned ? '<span class="pill pill-warn">Suspended</span>' : '<span class="pill pill-good">Active</span>'}</td>
+        <td><div class="row" style="flex-wrap:nowrap"><button class="btn btn-sm" data-act="verify-user" data-id="${u.id}">${u.verified ? 'Unverify' : '✔ Verify'}</button>${u.id === m.id ? '' : `<button class="btn btn-sm ${u.banned ? '' : 'btn-danger'}" data-act="ban-user" data-id="${u.id}">${u.banned ? 'Restore' : 'Suspend'}</button>`}</div></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+  }
+
+  if (t === 'communities') {
+    body = `<div class="card table-wrap"><table class="table"><thead><tr><th>Community</th><th>Members</th><th>Posts</th><th>Owner & mods</th><th></th></tr></thead><tbody>${db.communities.map((c) => `<tr><td><a class="link" href="#/c/${esc(c.slug)}">${esc(c.icon)} p/${esc(c.slug)}</a><div class="small muted">${esc(c.name)} · ${ago(c.createdAt)}</div></td><td>${c.members.length}</td><td>${db.posts.filter((p) => p.communityId === c.id).length}</td><td class="small">${userLink(user(c.createdBy))}${(c.mods || []).length ? '<br>' + c.mods.map((id) => esc('@' + (user(id)?.handle || '?'))).join(', ') : ''}</td>
+      <td><div class="row" style="flex-wrap:nowrap"><button class="btn btn-sm" data-act="edit-community" data-id="${c.id}">Manage</button><button class="btn btn-sm btn-danger" data-act="delete-community" data-id="${c.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  if (t === 'settings') {
+    const st = db.settings;
+    body = `<form id="settingsForm" class="card">
+      <h3>Platform settings</h3>
+      <div class="field"><label for="st-age">New-account waiting period (days)</label><input id="st-age" type="number" name="minAge" min="0" max="60" value="${st.communityMinAgeDays}" style="max-width:140px"><div class="hint">Accounts younger than this can't create communities or enter the Championship (anti-spam).</div></div>
+      <div class="field"><label class="row" style="font-weight:500"><input type="checkbox" name="toolApproval" ${st.toolApproval ? 'checked' : ''}> New tools and offers need staff approval before they appear</label></div>
+      <div class="field"><label for="st-ann">Site announcement</label><input id="st-ann" type="text" name="announcement" maxlength="200" value="${esc(st.announcement)}" placeholder="e.g. Championship voting closes Sunday!"><div class="hint">Shown at the top of every page. Leave empty to hide.</div></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-primary">Save settings</button></div>
+    </form>
+    <div class="card"><h3>Danger zone</h3><p class="small muted">Wipes everything in this browser and restores the demo data.</p><button class="btn btn-danger" id="adminReset">Reset all data</button></div>`;
+  }
+
+  if (t === 'audit') {
+    body = `<div class="card">${db.audit.map(auditRow).join('') || '<div class="empty">No staff actions yet.</div>'}</div>`;
+  }
+
+  return `<div class="page single" style="max-width:1100px">
+    <div class="row between"><div><h1>🛡️ Admin panel</h1><p class="muted small">Signed in as ${esc(m.name)} · ${ROLE_LABEL[m.role]}${isAdmin() ? '' : ' — user management and settings are admin-only'}</p></div></div>
+    <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${t === k ? 'active' : ''}" data-atab="${k}">${l}</button>`).join('')}</div>
+    ${body}
+  </div>`;
+}
+function afterAdmin(root) {
+  $$('[data-atab]', root).forEach((b) => b.onclick = () => { adminState.tab = b.dataset.atab; adminState.q = ''; render(); });
+  $$('[data-rstatus]', root).forEach((b) => b.onclick = () => { adminState.rstatus = b.dataset.rstatus; render(); });
+  const qi = $('#adminQ', root);
+  if (qi) qi.oninput = () => { adminState.q = qi.value; render(); const n = $('#adminQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
+  $$('[data-role-for]', root).forEach((sel) => sel.onchange = () => {
+    if (!isAdmin()) return;
+    const u = user(sel.dataset.roleFor), role = sel.value;
+    if (u.role === 'admin' && role !== 'admin' && db.users.filter((x) => x.role === 'admin').length === 1) { toast('Patch needs at least one admin'); return render(); }
+    if (!confirm(`Make @${u.handle} a ${ROLE_LABEL[role]}?`)) return render();
+    u.role = role; if (role === 'admin') u.banned = false;
+    audit('changed role', `@${u.handle} → ${ROLE_LABEL[role]}`);
+    notify(u.id, `Your Patch role is now: ${ROLE_LABEL[role]}`, role === 'user' ? '#/' : '#/admin');
+    save(); render(); toast('Role updated');
+  });
+  const sf = $('#settingsForm', root);
+  if (sf) sf.onsubmit = (e) => {
+    e.preventDefault();
+    const days = Math.max(0, Math.min(60, Number(sf.minAge.value) || 0));
+    Object.assign(db.settings, { communityMinAgeDays: days, toolApproval: sf.toolApproval.checked, announcement: sf.announcement.value.trim() });
+    audit('updated settings', `wait ${days}d · tool approval ${sf.toolApproval.checked ? 'on' : 'off'}`);
+    save(); render(); toast('Settings saved');
+  };
+  const rb = $('#adminReset', root);
+  if (rb) rb.onclick = () => { if (confirm('Reset ALL data to the demo state?')) { db = seed(); save(); location.hash = '#/'; render(); toast('Data reset'); } };
+}
+
 const notFound = () => '<div class="page single"><div class="card empty"><h2>Not found</h2><p>That page does not exist (yet).</p><a class="btn" href="#/">Go home</a></div></div>';
 const loginWall = (what) => `<div class="page single"><div class="card empty"><h2>Join Patch</h2><p>Log in to ${esc(what)}.</p><button class="btn btn-primary" data-act="login">Log in / Sign up</button></div></div>`;
 
@@ -900,7 +1148,15 @@ const actions = {
   save(id) { if (!requireLogin()) return; const p = post(id), m = me(); const i = p.saves.indexOf(m.id); if (i >= 0) p.saves.splice(i, 1); else p.saves.push(m.id); save(); render(); toast(i >= 0 ? 'Removed from saved' : 'Saved'); },
   share(id) { const url = `${location.origin}${location.pathname}#/post/${id}`; (navigator.clipboard?.writeText(url) || Promise.reject()).then(() => toast('Link copied'), () => prompt('Copy this link:', url)); },
   solve(id) { const p = post(id); p.solved = !p.solved; save(); render(); },
-  'delete-post'(id) { if (!confirm('Delete this post?')) return; db.posts = db.posts.filter((p) => p.id !== id); save(); if (location.hash.includes(id)) location.hash = '#/'; render(); },
+  'delete-post'(id) {
+    const p = post(id), m = me(); if (!p || !m) return;
+    const own = p.authorId === m.id;
+    if (!own && !canModerate(community(p.communityId))) return;
+    if (!confirm(own ? 'Delete this post?' : 'Remove this post as a moderator? The author will be notified.')) return;
+    db.posts = db.posts.filter((x) => x.id !== id);
+    if (!own) { audit('removed post', p.title); notify(p.authorId, `Your post "${p.title.slice(0, 50)}" was removed by moderators.`, '#/notifications'); }
+    save(); if (location.hash.includes(id)) location.hash = '#/'; render();
+  },
   'vote-poll'(id, el) { if (!requireLogin()) return; const p = post(id), m = me(), i = Number(el.dataset.i); p.poll.options.forEach((o, j) => { const k = o.votes.indexOf(m.id); if (k >= 0) o.votes.splice(k, 1); else if (j === i) o.votes.push(m.id); }); save(); render(); },
   join(id) { if (!requireLogin()) return; const c = community(id), m = me(); const i = c.members.indexOf(m.id); if (i >= 0) c.members.splice(i, 1); else c.members.push(m.id); save(); render(); },
   follow(id) { const m = me(); const i = m.following.indexOf(id); if (i >= 0) m.following.splice(i, 1); else { m.following.push(id); notify(id, `${m.name} started following you`, `#/u/${m.handle}`); } save(); render(); },
@@ -908,7 +1164,7 @@ const actions = {
   'new-tool': () => openNewTool(),
   'upvote-tool'(id) { if (!requireLogin()) return; const t = db.tools.find((x) => x.id === id), m = me(); const i = t.upvotes.indexOf(m.id); if (i >= 0) t.upvotes.splice(i, 1); else t.upvotes.push(m.id); save(); render(); },
   'add-update': (id) => openAddUpdate(id),
-  'delete-project'(id) { if (!confirm('Delete this project page? Its timeline will be lost.')) return; db.projects = db.projects.filter((p) => p.id !== id); db.posts.forEach((p) => { if (p.projectId === id) p.projectId = ''; }); save(); location.hash = '#/vault'; },
+  'delete-project'(id) { if (!confirm('Delete this project page? Its timeline will be lost.')) return; removeProject(id); save(); location.hash = '#/vault'; },
   'submit-entry': () => { if (requireLogin()) openSubmitEntry(); },
   'champ-vote'(id) {
     if (!requireLogin()) return;
@@ -923,12 +1179,103 @@ const actions = {
   'close-month': () => closeMonth(),
   'edit-profile': () => openEditProfile(),
   'read-all'() { db.notifications.forEach((n) => { if (n.userId === me().id) n.read = true; }); save(); render(); },
+  report(id, el) { if (requireLogin()) openReport(el.dataset.kind, id); },
+  'pin-post'(id) {
+    const p = post(id); if (!p || !canModerate(community(p.communityId))) return;
+    p.pinned = !p.pinned; audit(p.pinned ? 'pinned post' : 'unpinned post', p.title);
+    save(); render(); toast(p.pinned ? 'Pinned to the top' : 'Unpinned');
+  },
+  'delete-comment'(id) {
+    const [pid, cid] = id.split('|'); const p = post(pid), m = me();
+    const cm = p && p.comments.find((x) => x.id === cid); if (!cm || !m) return;
+    const own = cm.authorId === m.id;
+    if (!own && !canModerate(community(p.communityId))) return;
+    if (!confirm(own ? 'Delete this comment?' : 'Remove this comment as a moderator?')) return;
+    p.comments = p.comments.filter((x) => x !== cm);
+    if (!own) { audit('removed comment', `on "${p.title}"`); notify(cm.authorId, `Your comment on "${p.title.slice(0, 50)}" was removed by moderators.`, `#/post/${p.id}`); }
+    save(); render();
+  },
+  'edit-community': (id) => openEditCommunity(id),
+  'report-remove'(id) {
+    if (!isStaff()) return;
+    const r = db.reports.find((x) => x.id === id); if (!r) return;
+    if (!confirm(r.kind === 'user' ? 'Suspend this user?' : `Remove this ${r.kind}? The author will be notified.`)) return;
+    removeTarget(r);
+    db.reports.forEach((x) => { if (x.status === 'open' && x.kind === r.kind && x.targetId === r.targetId) Object.assign(x, { status: 'resolved', handledBy: me().id, handledAt: now() }); });
+    audit(r.kind === 'user' ? 'suspended user (report)' : `removed ${r.kind} (report)`, r.reason);
+    save(); render(); toast('Done — report resolved');
+  },
+  'report-dismiss'(id) {
+    if (!isStaff()) return;
+    const r = db.reports.find((x) => x.id === id); if (!r) return;
+    Object.assign(r, { status: 'dismissed', handledBy: me().id, handledAt: now() });
+    audit('dismissed report', `${r.kind} — ${r.reason}`); save(); render();
+  },
+  'ban-user'(id) {
+    if (!isAdmin()) return;
+    const u = user(id); if (!u) return;
+    if (u.role === 'admin') return toast("Admins can't be suspended — change their role first");
+    if (!u.banned && !confirm(`Suspend @${u.handle}? They will be able to browse but not post, comment or vote.`)) return;
+    u.banned = !u.banned;
+    audit(u.banned ? 'suspended user' : 'restored user', '@' + u.handle);
+    notify(u.id, u.banned ? 'Your account has been suspended by an admin.' : 'Your account has been restored. Welcome back!', '#/notifications');
+    save(); render();
+  },
+  'verify-user'(id) {
+    if (!isAdmin()) return;
+    const u = user(id); u.verified = !u.verified;
+    audit(u.verified ? 'verified user' : 'removed verification', '@' + u.handle);
+    if (u.verified) notify(u.id, 'You are now a ✔ Verified builder on Patch!', `#/u/${u.handle}`);
+    save(); render();
+  },
+  'approve-tool'(id) {
+    if (!isStaff()) return;
+    const t = db.tools.find((x) => x.id === id); if (!t) return;
+    t.status = 'approved'; t.createdAt = now();
+    audit('approved tool', t.name); notify(t.addedBy, `Your tool "${t.name}" was approved and is now live.`, '#/tools');
+    save(); render();
+  },
+  'reject-tool'(id) {
+    if (!isStaff()) return;
+    const t = db.tools.find((x) => x.id === id); if (!t) return;
+    db.tools = db.tools.filter((x) => x !== t);
+    audit('rejected tool', t.name); notify(t.addedBy, `Your tool "${t.name}" was not approved.`, '#/tools');
+    save(); render();
+  },
+  'remove-tool'(id) {
+    if (!isStaff()) return;
+    const t = db.tools.find((x) => x.id === id); if (!t || !confirm(`Remove "${t.name}" from Tools?`)) return;
+    db.tools = db.tools.filter((x) => x !== t); audit('removed tool', t.name); save(); render();
+  },
+  'delete-community'(id) {
+    if (!isAdmin()) return;
+    const c = community(id); if (!c) return;
+    const n = db.posts.filter((p) => p.communityId === id).length;
+    if (!confirm(`Delete p/${c.slug} and its ${plural(n, 'post')}? This cannot be undone.`)) return;
+    db.posts = db.posts.filter((p) => p.communityId !== id);
+    db.communities = db.communities.filter((x) => x !== c);
+    audit('deleted community', 'p/' + c.slug); save(); render();
+  },
+  disqualify(id) {
+    if (!isStaff()) return;
+    const sub = db.champ.submissions.find((x) => x.id === id); if (!sub) return;
+    if (!confirm('Disqualify this entry? Its votes will be removed.')) return;
+    db.champ.submissions = db.champ.submissions.filter((x) => x !== sub);
+    db.champ.votes = db.champ.votes.filter((v) => v.submissionId !== id);
+    notify(sub.userId, `Your ${catName(sub.category)} championship entry was disqualified by staff.`, '#/championship');
+    audit('disqualified entry', `${project(sub.projectId)?.name || 'entry'} — ${catName(sub.category)}`);
+    save(); render();
+  },
 };
+const BANNED_OK = new Set(['login', 'logout', 'share']);
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const fn = actions[el.dataset.act];
-  if (fn) { e.preventDefault(); fn(el.dataset.id, el); }
+  if (!fn) return;
+  e.preventDefault();
+  if (me()?.banned && !BANNED_OK.has(el.dataset.act)) return toast('Your account is suspended');
+  fn(el.dataset.id, el);
 });
 
 /* ---------- modal / toast ---------- */
@@ -936,6 +1283,10 @@ function modal(html) { $('#modalBody').innerHTML = html; $('#modal').hidden = fa
 function closeModal() { $('#modal').hidden = true; $('#modalBody').innerHTML = ''; }
 $('#modalClose').onclick = closeModal;
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+// Suspended accounts can browse but every form submission (post, comment, DM, vote…) is blocked.
+document.addEventListener('submit', (e) => {
+  if (me()?.banned && e.target.id !== 'signupForm') { e.preventDefault(); e.stopPropagation(); toast('Your account is suspended'); }
+}, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 let toastTimer;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 2200); }
@@ -944,6 +1295,9 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = fal
 function renderChrome(section) {
   const m = me();
   $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === section));
+  const an = $('#adminNav'), openReports = db.reports.filter((r) => r.status === 'open').length + db.tools.filter((t) => t.status === 'pending').length;
+  an.hidden = !isStaff();
+  an.innerHTML = `🛡️ Admin${openReports ? ` <span class="pill pill-warn">${openReports}</span>` : ''}`;
   const unread = m ? db.notifications.filter((n) => n.userId === m.id && !n.read).length : 0;
   const nc = $('#notifCount'); nc.hidden = !unread; nc.textContent = unread > 9 ? '9+' : unread;
   $('#msgDot').hidden = !(m && db.messages.some((x) => x.to === m.id && !x.read));
@@ -951,7 +1305,7 @@ function renderChrome(section) {
   um.innerHTML = m
     ? `<button class="icon-btn" id="umBtn" aria-label="Account" style="width:auto;padding:0 4px"><span class="avatar sm" style="background:${esc(m.color)}">${esc(m.name[0])}</span></button><div class="menu" id="umMenu" hidden>
         <div style="padding:8px 10px"><strong>${esc(m.name)}</strong><div class="small muted">@${esc(m.handle)}</div></div><hr>
-        <a href="#/u/${esc(m.handle)}">👤 Profile & trophy room</a><a href="#/vault/new">🗄️ Add project</a><a href="#/saved">🔖 Saved</a><hr>
+        <a href="#/u/${esc(m.handle)}">👤 Profile & trophy room</a><a href="#/vault/new">🗄️ Add project</a><a href="#/saved">🔖 Saved</a>${isStaff() ? '<a href="#/admin">🛡️ Admin panel</a>' : ''}<hr>
         <button data-act="login">🔁 Switch account</button><button data-act="logout">↩ Log out</button></div>`
     : '<button class="btn btn-primary btn-sm" data-act="login">Log in</button>';
   const b = $('#umBtn'); if (b) b.onclick = (e) => { e.stopPropagation(); $('#umMenu').hidden = !$('#umMenu').hidden; };
@@ -985,13 +1339,14 @@ function route() {
   if (a === 'notifications') return ['', viewNotifications, afterNotifications];
   if (a === 'saved') return ['saved', viewSaved];
   if (a === 'search') return ['', () => viewSearch(params.get('q') || '')];
+  if (a === 'admin') return ['admin', viewAdmin, afterAdmin];
   return ['', notFound];
 }
 let lastHash = '';
 function render() {
   const [section, view, after] = route();
   const root = $('#app');
-  root.innerHTML = view();
+  root.innerHTML = banner() + view();
   after && after(root);
   renderChrome(section);
   if (location.hash !== lastHash) { window.scrollTo(0, 0); lastHash = location.hash; }
