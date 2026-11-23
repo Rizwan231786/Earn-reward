@@ -22,6 +22,7 @@ public partial class App : System.Windows.Application
     private Mutex? _singleInstance;
     private ILogger<App>? _log;
     private bool _shuttingDown;
+    private string? _smokeOut;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -31,6 +32,7 @@ public partial class App : System.Windows.Application
         var smokeIndex = Array.IndexOf(args, "--smoke-test");
         var smokeOut = smokeIndex >= 0 && smokeIndex + 1 < args.Length ? args[smokeIndex + 1] : null;
         var urls = args.Where(UrlValidator.IsValid).ToList();
+        _smokeOut = smokeOut;
 
         var paths = new AppPaths();
         if (args.Contains("--register-browsers") || args.Contains("--unregister-browsers"))
@@ -93,7 +95,8 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             _log?.LogCritical(ex, "Startup failed");
-            MessageBox.Show($"MyDownloadManager could not start:\n\n{ex.Message}", "MyDownloadManager", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (_smokeOut is not null) await File.WriteAllTextAsync(Path.ChangeExtension(_smokeOut, ".txt"), $"FAILED: {ex}");
+            else MessageBox.Show($"MyDownloadManager could not start:\n\n{ex.Message}", "MyDownloadManager", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
     }
@@ -165,7 +168,12 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += (_, args) =>
         {
             _log?.LogError(args.Exception, "Unhandled UI exception");
-            MessageBox.Show(args.Exception.Message, "Unexpected error", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (_smokeOut is not null)
+            {
+                File.WriteAllText(Path.ChangeExtension(_smokeOut, ".txt"), $"FAILED: {args.Exception}");
+                Shutdown(1);
+            }
+            else MessageBox.Show(args.Exception.Message, "Unexpected error", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>

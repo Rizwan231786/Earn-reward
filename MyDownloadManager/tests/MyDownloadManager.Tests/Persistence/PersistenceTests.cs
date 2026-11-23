@@ -89,11 +89,12 @@ public sealed class PersistenceTests : IDisposable
     [Fact]
     public async Task UndecryptableSecrets_AreDroppedNotFatal()
     {
-        var (db, repo) = Create();
+        // Two protectors with different keys model the database being opened by a different Windows account.
+        var db = new SqliteDatabase(DbPath);
+        var repo = new SqliteDownloadRepository(db, new AesGcmSecretProtector(Path.Combine(_dir.Path, "k1.key")));
         var item = new DownloadItem { Url = "https://example.com/x", TargetDirectory = _dir.Path, Password = "pw" };
         await repo.UpsertAsync(item);
-        File.Delete(Path.Combine(_dir.Path, "secret.key")); // a different key = a different Windows account
-        var other = new SqliteDownloadRepository(db, SecretProtectorFactory.Create(_dir.Path));
+        var other = new SqliteDownloadRepository(db, new AesGcmSecretProtector(Path.Combine(_dir.Path, "k2.key")));
         var loaded = await other.GetAsync(item.Id);
         Assert.NotNull(loaded);
         Assert.Null(loaded.Password);
