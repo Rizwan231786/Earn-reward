@@ -31,9 +31,11 @@ OutputBaseFilename=MyDownloadManager_Setup
 SetupIconFile={#Root}\assets\MyDownloadManager.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
-Compression=lzma2/ultra64
+; lzma2/max (32 MB dictionary) in a separate compressor process: ultra64 with block threads exceeds the
+; 32-bit compiler's address space on a ~200 MB self-contained payload ("Out of memory").
+Compression=lzma2/max
 SolidCompression=yes
-LZMANumBlockThreads=4
+LZMAUseSeparateProcess=yes
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
