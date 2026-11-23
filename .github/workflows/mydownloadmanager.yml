@@ -64,6 +64,8 @@ jobs:
           dotnet publish src\MyDownloadManager.NativeHost -c Release -r win-x64 --self-contained true -o artifacts\publish\app -p:DebugType=None
 
       - name: Fetch LGPL FFmpeg for bundling (checksum verified)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: pwsh build\fetch-ffmpeg.ps1 -Destination artifacts\ffmpeg
 
       - name: Smoke test — launch the real WPF app and download a file

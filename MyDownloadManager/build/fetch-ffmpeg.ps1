@@ -6,10 +6,25 @@
 param(
     [string]$Destination = "artifacts\ffmpeg",
     [string]$Release = "latest",
-    [string]$Asset = "ffmpeg-n7.1-latest-win64-lgpl-7.1.zip"
+    # Optional exact asset name; by default the newest release-branch win64 LGPL build is chosen automatically.
+    [string]$Asset = ""
 )
 $ErrorActionPreference = "Stop"
 $base = "https://github.com/BtbN/FFmpeg-Builds/releases/download/$Release"
+
+if (-not $Asset) {
+    # Asset names change with each FFmpeg release (e.g. ffmpeg-n7.1-latest-win64-lgpl-7.1.zip), so discover them.
+    $headers = @{ "User-Agent" = "MyDownloadManager-build"; "Accept" = "application/vnd.github+json" }
+    if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
+    $rel = Invoke-RestMethod "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/$Release" -Headers $headers
+    $names = $rel.assets | ForEach-Object { $_.name }
+    $stable = $names | Where-Object { $_ -match '^ffmpeg-n(\d+)\.(\d+)-latest-win64-lgpl-\d+\.\d+\.zip$' } |
+        Sort-Object { [int]($_ -replace '^ffmpeg-n(\d+)\.(\d+).*$', '$1') * 1000 + [int]($_ -replace '^ffmpeg-n(\d+)\.(\d+).*$', '$2') } -Descending |
+        Select-Object -First 1
+    $Asset = if ($stable) { $stable } elseif ($names -contains "ffmpeg-master-latest-win64-lgpl.zip") { "ffmpeg-master-latest-win64-lgpl.zip" } else { $null }
+    if (-not $Asset) { throw "No win64 LGPL FFmpeg build found in release '$Release'. Assets: $($names -join ', ')" }
+    Write-Host "Selected FFmpeg asset: $Asset"
+}
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("mdm-ffmpeg-" + [Guid]::NewGuid())
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
