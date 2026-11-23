@@ -38,8 +38,8 @@ public sealed class MediaFixture : IAsyncLifetime
         foreach (var (name, size) in new[] { ("hi", "320x240"), ("lo", "160x120") })
         {
             var dir = D("hls_ts", name);
-            await Run(ffmpeg, [.. src, .. h264, "-s", size, "-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod",
-                "-hls_segment_filename", Path.Combine(dir, "seg_%03d.ts"), Path.Combine(dir, "index.m3u8")]);
+            await Run(ffmpeg, dir, [.. src, .. h264, "-s", size, "-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod",
+                "-hls_segment_filename", "seg_%03d.ts", "index.m3u8"]);
         }
         await File.WriteAllTextAsync(Path.Combine(Root, "hls_ts", "master.m3u8"), """
             #EXTM3U
@@ -52,26 +52,26 @@ public sealed class MediaFixture : IAsyncLifetime
 
         // HLS / fMP4 (CMAF) with init segment.
         var fmp4 = D("hls_fmp4");
-        await Run(ffmpeg, [.. src, .. h264, "-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod", "-hls_segment_type", "fmp4",
-            "-hls_fmp4_init_filename", "init.mp4", "-hls_segment_filename", Path.Combine(fmp4, "seg_%03d.m4s"), Path.Combine(fmp4, "index.m3u8")]);
+        await Run(ffmpeg, fmp4, [.. src, .. h264, "-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod", "-hls_segment_type", "fmp4",
+            "-hls_fmp4_init_filename", "init.mp4", "-hls_segment_filename", "seg_%03d.m4s", "index.m3u8"]);
 
         // HLS with AES-128 clear-key encryption (standard HLS encryption, key served by "our" server).
         var aes = D("hls_aes");
         await File.WriteAllBytesAsync(Path.Combine(aes, "key.bin"), AesKey);
-        var keyInfo = Path.Combine(Root, "keyinfo.txt");
-        await File.WriteAllTextAsync(keyInfo, $"key.bin\n{Path.Combine(aes, "key.bin")}\n");
-        await Run(ffmpeg, [.. src, .. h264, "-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod", "-hls_key_info_file", keyInfo,
-            "-hls_segment_filename", Path.Combine(aes, "seg_%03d.ts"), Path.Combine(aes, "index.m3u8")]);
+        var keyInfo = Path.Combine(aes, "keyinfo.txt");
+        await File.WriteAllTextAsync(keyInfo, "key.bin\nkey.bin\n");
+        await Run(ffmpeg, aes, [.. src, .. h264, "-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod", "-hls_key_info_file", keyInfo,
+            "-hls_segment_filename", "seg_%03d.ts", "index.m3u8"]);
 
         // DASH with separate video and audio adaptation sets (needs FFmpeg merging).
         var dash = D("dash");
-        await Run(ffmpeg, [.. src, .. h264, "-map", "0:v", "-map", "1:a", "-f", "dash", "-seg_duration", "1", "-use_template", "1",
-            "-use_timeline", "1", "-adaptation_sets", "id=0,streams=v id=1,streams=a", Path.Combine(dash, "manifest.mpd")]);
+        await Run(ffmpeg, dash, [.. src, .. h264, "-map", "0:v", "-map", "1:a", "-f", "dash", "-seg_duration", "1", "-use_template", "1",
+            "-use_timeline", "1", "-adaptation_sets", "id=0,streams=v id=1,streams=a", "manifest.mpd"]);
 
         // Direct files.
         var direct = D("direct");
-        await Run(ffmpeg, [.. src, .. h264, "-movflags", "+faststart", Path.Combine(direct, "clip.mp4")]);
-        await Run(ffmpeg, [.. src, "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "200k", "-c:a", "libopus", Path.Combine(direct, "clip.webm")]);
+        await Run(ffmpeg, direct, [.. src, .. h264, "-movflags", "+faststart", "clip.mp4"]);
+        await Run(ffmpeg, direct, [.. src, "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "200k", "-c:a", "libopus", "clip.webm"]);
         Available = true;
     }
 
@@ -82,9 +82,11 @@ public sealed class MediaFixture : IAsyncLifetime
         return p;
     }
 
-    private static async Task Run(string exe, string[] args)
+    /// <summary>Runs FFmpeg inside <paramref name="workDir"/> with relative output names, so playlists, init segments and
+    /// media segments always land next to each other (absolute paths are handled differently by some Windows builds).</summary>
+    private static async Task Run(string exe, string workDir, string[] args)
     {
-        var psi = new ProcessStartInfo(exe) { RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false };
+        var psi = new ProcessStartInfo(exe) { RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false, WorkingDirectory = workDir };
         foreach (var a in new[] { "-hide_banner", "-loglevel", "error", "-y" }.Concat(args)) psi.ArgumentList.Add(a);
         using var p = Process.Start(psi)!;
         var err = await p.StandardError.ReadToEndAsync();

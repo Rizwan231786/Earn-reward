@@ -221,7 +221,10 @@ public sealed class MediaDownloadEngine : IDownloadEngine, IDisposable
                 using (resp)
                 {
                     if (resp.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.PartialContent))
-                        throw DownloadException.FromStatus(resp.StatusCode, resp.ReasonPhrase);
+                    {
+                        var e = DownloadException.FromStatus(resp.StatusCode, resp.ReasonPhrase);
+                        throw new DownloadException($"{e.Message} Segment: {UrlValidator.Redact(seg.Uri.AbsoluteUri)}", e.IsTransient, e.StatusCode);
+                    }
                     var skip = seg.Range is { } rr && resp.StatusCode == HttpStatusCode.OK ? rr.Offset : 0; // server ignored Range
                     var limit = seg.Range?.Length ?? long.MaxValue;
                     await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
