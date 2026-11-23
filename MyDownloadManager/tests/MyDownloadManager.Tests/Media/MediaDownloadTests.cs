@@ -99,10 +99,20 @@ public sealed class MediaDownloadTests(MediaFixture media) : IClassFixture<Media
     [FfmpegFact]
     public async Task Media_PauseAndResume_SkipsCompletedSegments()
     {
-        _server.AddDirectory("slow", Path.Combine(media.Root, "hls_ts", "hi"), new ServeOptions { DelayPerChunkMs = 40 });
+        _server.AddDirectory("slow", Path.Combine(media.Root, "hls_ts", "hi"), new ServeOptions { DelayPerChunkMs = 60 });
         var item = new DownloadItem { Url = _server.Url("slow/index.m3u8").AbsoluteUri, TargetDirectory = _dir.Path, Kind = DownloadKind.Hls, MaxConnections = 2 };
         using var cts = new CancellationTokenSource();
-        var obs = new RecordingObserver { ProgressHook = p => { if (p.DownloadedBytes > 150_000) cts.Cancel(); } };
+        var totalSegments = Directory.GetFiles(Path.Combine(media.Root, "hls_ts", "hi"), "seg_*.ts").Length;
+        // Pause as soon as at least one segment file has been finalized (not after N bytes: with parallel
+        // connections and encoder-dependent segment sizes, N bytes may be spread over unfinished segments).
+        var obs = new RecordingObserver
+        {
+            ProgressHook = _ =>
+            {
+                var w = item.TempFileName is null ? null : Path.Combine(_dir.Path, item.TempFileName + ".work");
+                if (w is not null && Directory.Exists(w) && Directory.GetFiles(w, "t0_*.seg").Length > 0) cts.Cancel();
+            },
+        };
         using (var engine = new MediaDownloadEngine(TestUtil.FastOptions(2)))
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => engine.RunAsync(item, new DownloadContext { Observer = obs }, cts.Token));
         var work = Path.Combine(_dir.Path, item.TempFileName + ".work");
@@ -111,7 +121,7 @@ public sealed class MediaDownloadTests(MediaFixture media) : IClassFixture<Media
             .Select(f => int.Parse(Path.GetFileNameWithoutExtension(f)[3..]))
             .ToDictionary(i => $"slow/seg_{i:D3}.ts", i => _server.RequestCount($"slow/seg_{i:D3}.ts"));
         Assert.NotEmpty(completed);
-        Assert.True(completed.Count < 6, "the download should have been interrupted part-way");
+        Assert.True(completed.Count < totalSegments, "the download should have been interrupted part-way");
 
         using (var engine = new MediaDownloadEngine(TestUtil.FastOptions(4)))
             await engine.RunAsync(item, new DownloadContext(), CancellationToken.None);
