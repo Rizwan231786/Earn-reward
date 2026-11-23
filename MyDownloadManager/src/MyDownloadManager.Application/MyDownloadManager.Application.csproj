@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MyDownloadManager.Application</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyDownloadManager.Engine\MyDownloadManager.Engine.csproj" />
+    <ProjectReference Include="..\MyDownloadManager.Media\MyDownloadManager.Media.csproj" />
+    <ProjectReference Include="..\MyDownloadManager.Persistence\MyDownloadManager.Persistence.csproj" />
+    <ProjectReference Include="..\MyDownloadManager.Integration\MyDownloadManager.Integration.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+  </ItemGroup>
+</Project>

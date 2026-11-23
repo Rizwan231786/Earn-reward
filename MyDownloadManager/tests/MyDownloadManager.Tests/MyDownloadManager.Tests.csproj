@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\MyDownloadManager.Persistence\MyDownloadManager.Persistence.csproj" />
     <ProjectReference Include="..\..\src\MyDownloadManager.Media\MyDownloadManager.Media.csproj" />
     <ProjectReference Include="..\..\src\MyDownloadManager.Integration\MyDownloadManager.Integration.csproj" />
+    <ProjectReference Include="..\..\src\MyDownloadManager.Application\MyDownloadManager.Application.csproj" />
     <!-- Built so the end-to-end tests can spawn it like a browser would. -->
     <ProjectReference Include="..\..\src\MyDownloadManager.NativeHost\MyDownloadManager.NativeHost.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>

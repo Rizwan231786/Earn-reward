@@ -85,12 +85,13 @@ public sealed class DownloadManagerTests : IAsyncLifetime
     [Fact]
     public async Task PauseResume_ThroughManager()
     {
-        var content = BytesContent.Random(2 * 1024 * 1024, 101);
-        var url = _server.Add("pr.bin", content, new ServeOptions { DelayPerChunkMs = 5 });
+        var content = BytesContent.Random(4 * 1024 * 1024, 101);
+        var url = _server.Add("pr.bin", content, new ServeOptions { DelayPerChunkMs = 25 });
         var (m, repo) = CreateManager();
         await m.InitializeAsync(startTimer: false);
         var item = await m.AddAsync(new AddDownloadRequest { Url = url.AbsoluteUri });
         await WaitUntil(() => item.DownloadedBytes > 300_000);
+        Assert.NotEqual(DownloadStatus.Completed, item.Status);
 
         await m.PauseAsync(item.Id);
         Assert.Equal(DownloadStatus.Paused, item.Status);
@@ -142,12 +143,13 @@ public sealed class DownloadManagerTests : IAsyncLifetime
     [Fact]
     public async Task GracefulShutdown_ResumesOnNextLaunch()
     {
-        var content = BytesContent.Random(3 * 1024 * 1024, 104);
-        var url = _server.Add("shutdown.bin", content, new ServeOptions { DelayPerChunkMs = 5 });
+        var content = BytesContent.Random(4 * 1024 * 1024, 104);
+        var url = _server.Add("shutdown.bin", content, new ServeOptions { DelayPerChunkMs = 25 });
         var (m1, _) = CreateManager();
         await m1.InitializeAsync(startTimer: false);
         var item = await m1.AddAsync(new AddDownloadRequest { Url = url.AbsoluteUri });
         await WaitUntil(() => item.DownloadedBytes > 500_000);
+        Assert.NotEqual(DownloadStatus.Completed, item.Status);
         await m1.DisposeAsync(); // app exit
         SqliteConnection.ClearAllPools();
 
@@ -166,8 +168,8 @@ public sealed class DownloadManagerTests : IAsyncLifetime
     public async Task CrashRecovery_ItemLeftInDownloadingState_IsResumed()
     {
         // Produce a partial download exactly as a crash would leave it: temp file + checkpoint + "Downloading" status.
-        var content = BytesContent.Random(3 * 1024 * 1024, 105);
-        var url = _server.Add("crash2.bin", content, new ServeOptions { DelayPerChunkMs = 4 });
+        var content = BytesContent.Random(4 * 1024 * 1024, 105);
+        var url = _server.Add("crash2.bin", content, new ServeOptions { DelayPerChunkMs = 20 });
         Directory.CreateDirectory(Downloads);
         var item = TestUtil.Item(url, Downloads);
         var observer = new RecordingObserver();

@@ -19,19 +19,31 @@ namespace MyDownloadManager.Media;
 /// </summary>
 public sealed class MediaDownloadEngine : IDownloadEngine, IDisposable
 {
-    private readonly HttpClient _client;
+    private HttpClient _client;
+    private readonly HttpMessageHandler? _handlerOverride;
     private readonly ILogger _log;
     private readonly Func<string?> _ffmpegPathProvider;
 
     public MediaDownloadEngine(EngineOptions options, Func<string?>? ffmpegPathProvider = null, ILogger<MediaDownloadEngine>? logger = null, HttpMessageHandler? handler = null)
     {
         Options = options;
+        _handlerOverride = handler;
         _client = HttpClientProvider.Create(options, handler);
         _ffmpegPathProvider = ffmpegPathProvider ?? (() => FfmpegLocator.Find());
         _log = (ILogger?)logger ?? NullLogger.Instance;
     }
 
-    public EngineOptions Options { get; }
+    public EngineOptions Options { get; private set; }
+
+    /// <summary>Applies new network options to downloads started afterwards.</summary>
+    public void Reconfigure(EngineOptions options)
+    {
+        Options = options;
+        if (_handlerOverride is not null) return;
+        var old = _client;
+        _client = HttpClientProvider.Create(options);
+        _ = Task.Delay(TimeSpan.FromMinutes(10)).ContinueWith(_ => old.Dispose(), TaskScheduler.Default);
+    }
 
     public void Dispose() => _client.Dispose();
 

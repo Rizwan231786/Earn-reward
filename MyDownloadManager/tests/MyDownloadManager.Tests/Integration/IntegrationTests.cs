@@ -200,3 +200,46 @@ public sealed class NativeHostProcessTests : IAsyncDisposable
         Assert.Equal(1, p.ExitCode);
     }
 }
+
+public class NativeHostManifestTests
+{
+    [Fact]
+    public void Chromium_ManifestHasAllowedOrigins()
+    {
+        var path = OperatingSystem.IsWindows() ? @"C:\Program Files\MDM\MyDownloadManager.NativeHost.exe" : "/opt/mdm/host";
+        using var doc = JsonDocument.Parse(NativeHostManifest.BuildChromium(path));
+        var r = doc.RootElement;
+        Assert.Equal("com.mydownloadmanager.host", r.GetProperty("name").GetString());
+        Assert.Equal("stdio", r.GetProperty("type").GetString());
+        Assert.Equal(path, r.GetProperty("path").GetString());
+        Assert.Equal("chrome-extension://jepeaacjobbkicoofllleimejjcjebge/", r.GetProperty("allowed_origins")[0].GetString());
+    }
+
+    [Fact]
+    public void Firefox_ManifestHasAllowedExtensions()
+    {
+        var path = OperatingSystem.IsWindows() ? @"C:\x\host.exe" : "/x/host";
+        using var doc = JsonDocument.Parse(NativeHostManifest.BuildFirefox(path));
+        Assert.Equal("mydownloadmanager@mydownloadmanager.app", doc.RootElement.GetProperty("allowed_extensions")[0].GetString());
+    }
+
+    [Fact]
+    public void RejectsBadInput()
+    {
+        Assert.Throws<ArgumentException>(() => NativeHostManifest.BuildChromium("relative/host.exe"));
+        Assert.Throws<ArgumentException>(() => NativeHostManifest.BuildChromium(OperatingSystem.IsWindows() ? @"C:\h.exe" : "/h", ["not-an-id"]));
+    }
+
+    [Fact]
+    public void ChromiumId_MatchesExtensionPublicKey()
+    {
+        // The extension ID is the first 128 bits of SHA-256(public key DER), hex digits mapped 0-f → a-p.
+        var root = AppContext.BaseDirectory;
+        while (!File.Exists(Path.Combine(root, "MyDownloadManager.slnx"))) root = Path.GetDirectoryName(root.TrimEnd(Path.DirectorySeparatorChar))!;
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "extensions", "manifest.chromium.json")));
+        var der = Convert.FromBase64String(doc.RootElement.GetProperty("key").GetString()!);
+        var hex = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(der))[..32];
+        var id = new string(hex.Select(c => (char)('a' + Convert.ToInt32(c.ToString(), 16))).ToArray());
+        Assert.Equal(NativeHostManifest.ChromiumExtensionId, id);
+    }
+}

@@ -161,3 +161,18 @@ public class RateLimiterTests
         });
     }
 }
+
+public class MarkOfTheWebTests
+{
+    [Fact]
+    public void Stream_HasInternetZoneAndNoTokens()
+    {
+        var s = MarkOfTheWeb.BuildStream("https://u:p@cdn.example.com/f.exe?token=SECRET", "https://example.com/page?q=1");
+        Assert.StartsWith("[ZoneTransfer]\r\nZoneId=3\r\n", s);
+        Assert.Contains("HostUrl=https://cdn.example.com/f.exe\r\n", s);
+        Assert.Contains("ReferrerUrl=https://example.com/page\r\n", s);
+        Assert.DoesNotContain("SECRET", s);
+        Assert.DoesNotContain("u:p", s);
+        Assert.DoesNotContain("HostUrl", MarkOfTheWeb.BuildStream("javascript:x", null));
+    }
+}

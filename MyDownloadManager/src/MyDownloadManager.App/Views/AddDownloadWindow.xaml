@@ -1,0 +1,100 @@
+<Window x:Class="MyDownloadManager.App.Views.AddDownloadWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:MyDownloadManager.App.ViewModels"
+        Title="Add downloads" Width="640" SizeToContent="Height" MinHeight="420" ResizeMode="CanResizeWithGrip"
+        Style="{StaticResource AppWindow}" WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
+        Icon="pack://application:,,,/Assets/MyDownloadManager.ico"
+        FocusManager.FocusedElement="{Binding ElementName=UrlsBox}">
+    <Grid Margin="18,14,18,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3">
+                <Run Text="Address(es) — one per line, or paste any text containing links" /><Run Text="   " />
+                <Run Text="{Binding UrlCount, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" valid" />
+            </TextBlock>
+            <TextBox x:Name="UrlsBox" Text="{Binding UrlsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True"
+                     MinHeight="70" MaxHeight="180" VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap" VerticalContentAlignment="Top" />
+        </StackPanel>
+
+        <!-- Stream quality (HLS / DASH) -->
+        <Border Grid.Row="1" Margin="0,10,0,0" Padding="10" CornerRadius="6" Background="#EEF4FF"
+                Visibility="{Binding IsMediaUrl, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Check stream" Command="{Binding InspectCommand}" />
+                    <TextBlock Text="Streaming video detected (HLS/DASH)" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Text="{Binding MediaMessage}" Style="{StaticResource Hint}" Margin="0,6,0,0" Visibility="{Binding MediaMessage, Converter={StaticResource NullToVis}}" />
+                <ComboBox ItemsSource="{Binding Variants}" SelectedItem="{Binding SelectedVariant}" DisplayMemberPath="Label" Margin="0,6,0,0"
+                          Visibility="{Binding SelectedVariant, Converter={StaticResource NullToVis}}" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Save to folder" Style="{StaticResource FieldLabel}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="…" Width="34" Margin="4,0,0,0" Style="{StaticResource SecondaryButton}" MinWidth="0" Click="Browse_Click" />
+                    <TextBox Text="{Binding Folder, UpdateSourceTrigger=PropertyChanged}" />
+                </DockPanel>
+                <CheckBox Content="Sort into category sub-folders (Video, Music, …)" IsChecked="{Binding UseCategoryFolder}" />
+                <TextBlock Text="File name (optional, single download only)" Style="{StaticResource FieldLabel}" />
+                <TextBox Text="{Binding FileName, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsSingle}" />
+                <TextBlock Text="Start" Style="{StaticResource FieldLabel}" />
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Content="Now" Margin="0,0,14,0" IsChecked="{Binding StartMode, Converter={StaticResource EnumEquals}, ConverterParameter=Now}" />
+                    <RadioButton Content="Add paused" Margin="0,0,14,0" IsChecked="{Binding StartMode, Converter={StaticResource EnumEquals}, ConverterParameter=Paused}" />
+                    <RadioButton Content="Scheduled" IsChecked="{Binding StartMode, Converter={StaticResource EnumEquals}, ConverterParameter=Scheduled}" x:Name="ScheduledRadio" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding IsChecked, ElementName=ScheduledRadio, Converter={StaticResource BoolToVis}}">
+                    <DatePicker SelectedDate="{Binding ScheduleDate}" Width="130" />
+                    <TextBox Text="{Binding ScheduleTime, UpdateSourceTrigger=PropertyChanged}" Width="70" Margin="6,0,0,0" ToolTip="HH:mm" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Without a date, scheduled downloads start in the daily schedule window (Settings → Scheduler)."
+                           Visibility="{Binding IsChecked, ElementName=ScheduledRadio, Converter={StaticResource BoolToVis}}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="Connections" Style="{StaticResource FieldLabel}" />
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Connections}" Width="24" TextAlignment="Right" />
+                    <Slider Minimum="1" Maximum="32" Value="{Binding Connections}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                </DockPanel>
+                <TextBlock Text="Speed limit (e.g. 500K, 2M; empty = none)" Style="{StaticResource FieldLabel}" />
+                <TextBox Text="{Binding SpeedLimit, UpdateSourceTrigger=PropertyChanged}" />
+                <Expander Header="Advanced: authentication, referrer, checksum" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Referrer page" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding Referrer, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="User name (HTTP Basic, sent only to this site)" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding UserName, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Password (stored encrypted)" Style="{StaticResource FieldLabel}" />
+                        <PasswordBox x:Name="PasswordBox" PasswordChanged="PasswordBox_PasswordChanged" />
+                        <TextBlock Text="Expected checksum (e.g. sha256:…)" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding Checksum, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Grid.Row="3" Text="{Binding Error}" Foreground="{StaticResource ErrorBrush}" TextWrapping="Wrap" Margin="0,10,0,0"
+                   Visibility="{Binding Error, Converter={StaticResource NullToVis}}" />
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Style="{StaticResource SecondaryButton}" Content="Cancel" Command="{Binding CloseCommand}" IsCancel="True" Margin="0,0,8,0" />
+            <Button Style="{StaticResource PrimaryButton}" Content="Download" Command="{Binding AddCommand}" IsDefault="True" />
+        </StackPanel>
+    </Grid>
+</Window>

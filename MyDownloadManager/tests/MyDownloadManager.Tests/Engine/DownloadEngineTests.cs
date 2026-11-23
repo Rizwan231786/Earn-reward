@@ -148,7 +148,7 @@ public sealed class DownloadEngineTests : IAsyncLifetime
     public async Task PauseThenResume_ProducesIdenticalFile()
     {
         var content = BytesContent.Random(3 * 1024 * 1024, 10);
-        var url = _server.Add("pause.bin", content, new ServeOptions { DelayPerChunkMs = 5 });
+        var url = _server.Add("pause.bin", content, new ServeOptions { DelayPerChunkMs = 20 });
         var item = TestUtil.Item(url, _dir.Path);
         using var cts = new CancellationTokenSource();
         var observer = new RecordingObserver { };
@@ -180,7 +180,7 @@ public sealed class DownloadEngineTests : IAsyncLifetime
     {
         // Simulates an app/PC crash: only the last persisted checkpoint survives, in-memory state is lost.
         var content = BytesContent.Random(4 * 1024 * 1024, 11);
-        var url = _server.Add("crash.bin", content, new ServeOptions { DelayPerChunkMs = 4 });
+        var url = _server.Add("crash.bin", content, new ServeOptions { DelayPerChunkMs = 20 });
         var item = TestUtil.Item(url, _dir.Path);
         using var cts = new CancellationTokenSource();
         var observer = new RecordingObserver();
@@ -208,7 +208,7 @@ public sealed class DownloadEngineTests : IAsyncLifetime
     public async Task ResumeAfterRemoteFileChanged_RestartsAndGetsNewContent()
     {
         var v1 = BytesContent.Random(2 * 1024 * 1024, 12);
-        var url = _server.Add("changing.bin", v1, new ServeOptions { DelayPerChunkMs = 5 });
+        var url = _server.Add("changing.bin", v1, new ServeOptions { DelayPerChunkMs = 20 });
         var item = TestUtil.Item(url, _dir.Path);
         using var cts = new CancellationTokenSource();
         var observer = new RecordingObserver { ProgressHook = p => { if (p.DownloadedBytes > 400_000) cts.Cancel(); } };

@@ -357,6 +357,7 @@ public sealed class DownloadManager : IAsyncDisposable
         try
         {
             await engine.RunAsync(item, context, run.Cts.Token).ConfigureAwait(false);
+            MarkOfTheWeb.TryApply(item.FullPath, item.ResolvedUrl ?? item.Url, item.Referrer);
             await LogAsync("Info", $"Completed '{item.FileName}'.", item.Id).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (run.Cts.IsCancellationRequested)

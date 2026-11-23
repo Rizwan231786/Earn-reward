@@ -106,13 +106,16 @@ public sealed class MediaDownloadTests(MediaFixture media) : IClassFixture<Media
         using (var engine = new MediaDownloadEngine(TestUtil.FastOptions(2)))
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => engine.RunAsync(item, new DownloadContext { Observer = obs }, cts.Token));
         var work = Path.Combine(_dir.Path, item.TempFileName + ".work");
-        var done = Directory.GetFiles(work, "*.seg").Length;
-        Assert.True(done > 0, "some segments should be complete");
-        var firstSegRequests = _server.RequestCount("slow/seg_000.ts");
+        // Segments whose file was finalized (renamed from .part) before the pause must never be fetched again.
+        var completed = Directory.GetFiles(work, "t0_*.seg")
+            .Select(f => int.Parse(Path.GetFileNameWithoutExtension(f)[3..]))
+            .ToDictionary(i => $"slow/seg_{i:D3}.ts", i => _server.RequestCount($"slow/seg_{i:D3}.ts"));
+        Assert.NotEmpty(completed);
+        Assert.True(completed.Count < 6, "the download should have been interrupted part-way");
 
         using (var engine = new MediaDownloadEngine(TestUtil.FastOptions(4)))
             await engine.RunAsync(item, new DownloadContext(), CancellationToken.None);
-        Assert.Equal(firstSegRequests, _server.RequestCount("slow/seg_000.ts")); // not downloaded again
+        foreach (var (path, before) in completed) Assert.Equal(before, _server.RequestCount(path));
         AssertPlayable(item.FullPath, "h264", "aac");
     }
 
