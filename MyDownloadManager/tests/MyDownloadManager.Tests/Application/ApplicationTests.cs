@@ -165,6 +165,32 @@ public sealed class ApplicationTests(MediaFixture media) : IClassFixture<MediaFi
     }
 
     [Fact]
+    public async Task Container_DisposesCleanlyLikeTheAppOnExit()
+    {
+        // Regression: the app used ServiceProvider.Dispose(), which throws for IAsyncDisposable-only services
+        // (IpcServer, DownloadManager) — every app exit crashed. The app now disposes the container asynchronously.
+        async Task<ServiceProvider> Compose(string name)
+        {
+            var services = new ServiceCollection();
+            services.AddMyDownloadManager(new AppPaths(Path.Combine(_dir.Path, name)));
+            services.AddSingleton<IUserInteraction>(_ui);
+            var provider = services.BuildServiceProvider();
+            provider.GetRequiredService<IpcServer>();
+            await provider.GetRequiredService<DownloadManager>().InitializeAsync(startTimer: false);
+            return provider;
+        }
+
+        var broken = await Compose("old-path");
+        Assert.Throws<InvalidOperationException>(() => broken.Dispose());
+
+        var fixedPath = await Compose("new-path");
+        var ipc = fixedPath.GetRequiredService<IpcServer>();
+        await fixedPath.GetRequiredService<DownloadManager>().DisposeAsync();
+        await fixedPath.DisposeAsync();
+        await ipc.DisposeAsync(); // idempotent
+    }
+
+    [Fact]
     public void ClipboardFilter_OffersDownloadableLinksOnce()
     {
         var f = new ClipboardUrlFilter();

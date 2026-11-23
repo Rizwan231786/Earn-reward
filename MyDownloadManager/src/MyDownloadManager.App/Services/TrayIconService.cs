@@ -48,8 +48,12 @@ public sealed class TrayIconService : IDisposable
         _icon.ShowBalloonTip(5000, title, message.Length > 250 ? message[..250] + "…" : message, Forms.ToolTipIcon.Info);
     }
 
+    private bool _disposed;
+
     public void Dispose()
     {
+        if (_disposed) return; // also disposed by the DI container on shutdown
+        _disposed = true;
         _icon.Visible = false;
         _icon.Dispose();
     }

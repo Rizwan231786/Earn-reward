@@ -37,9 +37,10 @@ public partial class App : System.Windows.Application
         var paths = new AppPaths();
         if (args.Contains("--register-browsers") || args.Contains("--unregister-browsers"))
         {
-            using var sp = BuildServices(paths);
+            var sp = BuildServices(paths);
             var registrar = sp.GetRequiredService<NativeHostRegistrar>();
             if (args.Contains("--register-browsers")) registrar.Register(); else registrar.Unregister();
+            await sp.DisposeAsync();
             Shutdown(0);
             return;
         }
@@ -146,18 +147,21 @@ public partial class App : System.Windows.Application
         {
             try
             {
-                // Pauses running transfers with a final checkpoint; they resume automatically on next start.
+                // UI-bound services first, on the UI thread.
+                _services.GetService<ClipboardMonitor>()?.Dispose();
+                _services.GetService<TrayIconService>()?.Dispose();
+                _log?.LogInformation("MyDownloadManager stopping");
+                // Pauses running transfers with a final checkpoint (they resume automatically on next start), then
+                // disposes the container asynchronously: several services (IpcServer, DownloadManager) are
+                // IAsyncDisposable only, and a synchronous ServiceProvider.Dispose() throws for them.
+                var services = _services;
                 Task.Run(async () =>
                 {
-                    await _services.GetRequiredService<DownloadManager>().DisposeAsync();
-                    await _services.GetRequiredService<IpcServer>().DisposeAsync();
-                }).Wait(TimeSpan.FromSeconds(10));
+                    await services.GetRequiredService<DownloadManager>().DisposeAsync();
+                    await services.DisposeAsync();
+                }).Wait(TimeSpan.FromSeconds(15));
             }
             catch (AggregateException ex) { _log?.LogError(ex, "Shutdown error"); }
-            _services.GetService<ClipboardMonitor>()?.Dispose();
-            _services.GetService<TrayIconService>()?.Dispose();
-            _log?.LogInformation("MyDownloadManager stopped");
-            _services.Dispose();
         }
         _singleInstance?.Dispose();
         base.OnExit(e);

@@ -111,6 +111,15 @@ public sealed class IpcTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Dispose_IsIdempotent()
+    {
+        var server = new IpcServer((_, _) => Task.FromResult(HostResponse.Success()), "mdm-dispose-" + Guid.NewGuid().ToString("N"));
+        server.Start();
+        await server.DisposeAsync();
+        await server.DisposeAsync();
+    }
+
+    [Fact]
     public async Task NoServer_TimesOut() =>
         await Assert.ThrowsAsync<TimeoutException>(() =>
             IpcClient.SendAsync(new BrowserMessage { Type = "ping" }, TimeSpan.FromMilliseconds(200), pipeName: "mdm-nobody-" + Guid.NewGuid().ToString("N")));

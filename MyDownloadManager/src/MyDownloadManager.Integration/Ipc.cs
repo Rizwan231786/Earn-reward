@@ -106,8 +106,12 @@ public sealed class IpcServer : IAsyncDisposable
         }
     }
 
+    private int _disposed;
+
+    /// <summary>Idempotent: the app disposes the server explicitly and the DI container disposes it again.</summary>
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
         await _cts.CancelAsync().ConfigureAwait(false);
         if (_loop is not null) { try { await _loop.ConfigureAwait(false); } catch (OperationCanceledException) { } }
         _cts.Dispose();
