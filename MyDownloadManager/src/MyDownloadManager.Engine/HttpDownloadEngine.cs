@@ -28,6 +28,9 @@ public interface IDownloadEngine
 /// <summary>Multi-connection HTTP/HTTPS download engine.</summary>
 public sealed class HttpDownloadEngine : IDownloadEngine, IDisposable
 {
+    /// <summary>Extension of in-progress temp files (and "&lt;temp&gt;.work" folders for media downloads).</summary>
+    public const string TempExtension = ".mdmpart";
+
     private HttpClient _client;
     private readonly HttpMessageHandler? _handlerOverride;
     private readonly ILogger _logger;

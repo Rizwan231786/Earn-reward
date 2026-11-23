@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/MyDownloadManager.Core/MyDownloadManager.Core.csproj" />
     <Project Path="src/MyDownloadManager.Engine/MyDownloadManager.Engine.csproj" />
+    <Project Path="src/MyDownloadManager.Media/MyDownloadManager.Media.csproj" />
     <Project Path="src/MyDownloadManager.Persistence/MyDownloadManager.Persistence.csproj" />
   </Folder>
   <Folder Name="/tests/">

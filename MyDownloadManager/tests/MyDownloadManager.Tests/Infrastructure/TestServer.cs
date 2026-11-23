@@ -70,6 +70,28 @@ public sealed class TestServer : IAsyncDisposable
         return new Uri(BaseUri, path.TrimStart('/'));
     }
 
+    /// <summary>Serves every file under <paramref name="directory"/> at "/{prefix}/{relative path}".</summary>
+    public Uri AddDirectory(string prefix, string directory, ServeOptions? options = null)
+    {
+        foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(directory, file).Replace('\\', '/');
+            var ext = Path.GetExtension(file).ToLowerInvariant();
+            var o = new ServeOptions
+            {
+                SupportRanges = options?.SupportRanges ?? true, DelayPerChunkMs = options?.DelayPerChunkMs ?? 0,
+                RequireCookie = options?.RequireCookie,
+                ContentType = ext switch
+                {
+                    ".m3u8" => "application/vnd.apple.mpegurl", ".mpd" => "application/dash+xml", ".ts" => "video/mp2t",
+                    ".mp4" or ".m4s" => "video/mp4", ".webm" => "video/webm", _ => "application/octet-stream",
+                },
+            };
+            Add($"{prefix}/{rel}", new BytesContent(File.ReadAllBytes(file)), o);
+        }
+        return new Uri(BaseUri, prefix.Trim('/') + "/");
+    }
+
     public Uri Url(string relative) => new(BaseUri, relative.TrimStart('/'));
     public int RequestCount(string path) => _requestCounts.GetValueOrDefault(path.TrimStart('/'));
 

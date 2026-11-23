@@ -24,7 +24,7 @@ namespace MyDownloadManager.Engine;
 /// </summary>
 internal sealed class DownloadRun
 {
-    public const string TempExtension = ".mdmpart";
+    public const string TempExtension = HttpDownloadEngine.TempExtension;
 
     private readonly EngineOptions _options;
     private readonly DownloadItem _item;
