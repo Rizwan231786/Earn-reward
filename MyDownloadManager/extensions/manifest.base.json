@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "MyDownloadManager Integration",
+  "short_name": "MyDownloadManager",
+  "version": "1.0.0",
+  "description": "Send downloads and videos from the browser to the MyDownloadManager desktop app.",
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "permissions": ["downloads", "nativeMessaging", "contextMenus", "cookies", "storage", "webRequest", "tabs", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "action": { "default_title": "MyDownloadManager", "default_popup": "popup.html", "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" } },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "content_scripts": [
+    { "matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_idle", "all_frames": true }
+  ]
+}

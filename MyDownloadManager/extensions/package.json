@@ -1,0 +1,11 @@
+{
+  "name": "mydownloadmanager-extensions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser extensions for MyDownloadManager (Chrome, Edge, Firefox). No runtime dependencies.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}
