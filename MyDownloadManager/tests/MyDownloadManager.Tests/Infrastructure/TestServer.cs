@@ -95,6 +95,11 @@ public sealed class TestServer : IAsyncDisposable
     public Uri Url(string relative) => new(BaseUri, relative.TrimStart('/'));
     public int RequestCount(string path) => _requestCounts.GetValueOrDefault(path.TrimStart('/'));
 
+    private readonly ConcurrentDictionary<string, int> _inFlight = new();
+    private readonly ConcurrentDictionary<string, int> _maxInFlight = new();
+    /// <summary>Highest number of simultaneous body transfers observed for a path (server-side, not sampled).</summary>
+    public int MaxConcurrentRequests(string path) => _maxInFlight.GetValueOrDefault(path.TrimStart('/'));
+
     private async Task HandleAsync(HttpContext ctx)
     {
         var path = ctx.Request.Path.Value!.TrimStart('/');
@@ -180,6 +185,14 @@ public sealed class TestServer : IAsyncDisposable
         if (!(opt.Chunked && !partial)) ctx.Response.ContentLength = content.Length == 0 ? 0 : length;
         if (content.Length == 0) return;
 
+        var now = _inFlight.AddOrUpdate(path, 1, (_, n) => n + 1);
+        _maxInFlight.AddOrUpdate(path, now, (_, m) => Math.Max(m, now));
+        try { await SendBodyAsync(ctx, path, content, opt, start, length); }
+        finally { _inFlight.AddOrUpdate(path, 0, (_, n) => n - 1); }
+    }
+
+    private async Task SendBodyAsync(HttpContext ctx, string path, TestContent content, ServeOptions opt, long start, long length)
+    {
         var failNow = opt.FailAfterBytes >= 0 && _failuresServed.AddOrUpdate(path, 1, (_, n) => n + 1) <= opt.FailCount;
         var buf = new byte[16 * 1024];
         long sent = 0;

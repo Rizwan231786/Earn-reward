@@ -50,7 +50,8 @@ public sealed class DownloadEngineTests : IAsyncLifetime
         Assert.Equal(content.Sha256(), TestUtil.FileSha256(item.FullPath));
         Assert.True(item.SupportsRanges);
         Assert.True(_server.RequestCount("multi.bin") >= 6, "expected one request per segment");
-        Assert.True(observer.MaxActiveConnections > 1, $"expected parallel connections, saw {observer.MaxActiveConnections}");
+        // Measured at the server (not from 250 ms progress samples, which a fast machine can finish between).
+        Assert.True(_server.MaxConcurrentRequests("multi.bin") > 1, $"expected parallel connections, saw {_server.MaxConcurrentRequests("multi.bin")}");
         Assert.Contains(_server.Requests, r => r.Path == "/multi.bin" && r.Range is not null && !r.Range.StartsWith("bytes=0-", StringComparison.Ordinal));
         AssertNoTempFiles();
     }
@@ -65,7 +66,7 @@ public sealed class DownloadEngineTests : IAsyncLifetime
 
         Assert.False(item.SupportsRanges);
         Assert.Equal(1, _server.RequestCount("norange.bin")); // probe response body is reused, no second request
-        Assert.True(observer.MaxActiveConnections <= 1);
+        Assert.Equal(1, _server.MaxConcurrentRequests("norange.bin"));
         Assert.Equal(content.Sha256(), TestUtil.FileSha256(item.FullPath));
     }
 
