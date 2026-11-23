@@ -14,9 +14,9 @@ public interface IDownloadRepository
 {
     Task<IReadOnlyList<DownloadItem>> GetAllAsync(CancellationToken ct = default);
     Task<DownloadItem?> GetAsync(Guid id, CancellationToken ct = default);
-    Task UpsertAsync(DownloadItem item, CancellationToken ct = default);
-    /// <summary>Fast-path persistence of progress counters and segment table only.</summary>
-    Task SaveProgressAsync(DownloadItem item, CancellationToken ct = default);
+    /// <summary>Inserts or replaces the item and its segment table (<paramref name="segments"/> or, when null, item.Segments).
+    /// Pass a snapshot while the item is being downloaded, because the live list is mutated by the engine.</summary>
+    Task UpsertAsync(DownloadItem item, IReadOnlyList<DownloadSegment>? segments = null, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
 }
 

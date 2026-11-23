@@ -20,5 +20,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyDownloadManager.Core\MyDownloadManager.Core.csproj" />
     <ProjectReference Include="..\..\src\MyDownloadManager.Engine\MyDownloadManager.Engine.csproj" />
+    <ProjectReference Include="..\..\src\MyDownloadManager.Persistence\MyDownloadManager.Persistence.csproj" />
   </ItemGroup>
 </Project>
