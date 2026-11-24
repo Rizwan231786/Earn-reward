@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Video Studio</title>
+<style>
+:root{
+  --bg:#070F1E; --panel:#0D1A2F; --panel2:#11223C; --line:#1E3352; --text:#E8F4F8; --muted:#8FA6BF;
+  --accent:#14C8C0; --accent2:#2EE6D6; --ice:#DCF3FA; --danger:#FF6B7A; --ok:#3DDC97; --warn:#FFC66D;
+  --r:14px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 85% -10%,rgba(20,200,192,.10),transparent),var(--bg);color:var(--text);
+  font:14px/1.5 Inter,"Segoe UI",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:18px 28px;border-bottom:1px solid var(--line)}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#0B6E8A);display:grid;place-items:center;font-weight:800}
+h1{font:700 18px Montserrat,Inter,sans-serif;margin:0;letter-spacing:.2px}
+h1 small{color:var(--muted);font-weight:500;margin-left:8px}
+#sys{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:4px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.pill.ok{color:var(--ok)} .pill.bad{color:var(--danger)}
+main{display:grid;grid-template-columns:300px 1fr;gap:20px;padding:20px 28px;max-width:1500px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr;padding:16px}}
+.card{background:linear-gradient(180deg,var(--panel),#0B1729);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:18px}
+.card h2{font:700 13px Montserrat,Inter;text-transform:uppercase;letter-spacing:1.2px;color:var(--accent2);margin:0 0 12px}
+button{background:var(--accent);color:#04221F;border:0;border-radius:10px;padding:9px 14px;font-weight:700;cursor:pointer}
+button.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+button:disabled{opacity:.45;cursor:default}
+input,select,textarea{width:100%;background:#081325;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 11px;font:inherit}
+textarea{min-height:70px}
+label{display:block;color:var(--muted);font-size:12px;margin:10px 0 4px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.row>*{flex:1;min-width:140px}
+.plist .item{padding:10px 12px;border-radius:10px;cursor:pointer;border:1px solid transparent;margin-bottom:6px}
+.plist .item:hover{background:var(--panel2)} .plist .item.sel{border-color:var(--accent);background:rgba(20,200,192,.08)}
+.plist .meta{color:var(--muted);font-size:12px}
+.drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:22px;text-align:center;color:var(--muted)}
+.drop.over{border-color:var(--accent);color:var(--accent2)}
+table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:600}
+.steps{display:flex;gap:8px;flex-wrap:wrap}
+.bar{height:8px;background:#081325;border-radius:99px;overflow:hidden;margin-top:6px}.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+video{width:100%;max-height:520px;background:#000;border-radius:12px}
+.muted{color:var(--muted)} .err{color:var(--danger)} .okc{color:var(--ok)}
+pre{white-space:pre-wrap;background:#081325;padding:10px;border-radius:10px;max-height:260px;overflow:auto;font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="logo">▶</div><h1>AI Video Studio <small>local editing workstation</small></h1><div id="sys"></div></header>
+<main>
+  <aside>
+    <div class="card"><h2>New project</h2>
+      <label>Name</label><input id="np-name" placeholder="Clinic promo – March">
+      <div class="row"><div><label>Format</label><select id="np-aspect">
+        <option value="">Profile default</option><option value="9:16">9:16 Reels / Shorts / TikTok</option>
+        <option value="16:9">16:9 YouTube / Corporate</option><option value="1:1">1:1 Square</option><option value="4:5">4:5 Feed</option></select></div></div>
+      <label>Editing profile</label><select id="np-profile"></select>
+      <div style="margin-top:12px"><button onclick="createProject()">Create project</button></div>
+    </div>
+    <div class="card"><h2>Projects</h2><div id="plist" class="plist"></div></div>
+  </aside>
+  <section>
+    <div class="card"><h2>Upload to inbox</h2>
+      <div id="drop" class="drop">Drop videos, voiceovers, music, logos here, or <input type="file" id="file" multiple style="width:auto;display:inline"></div>
+      <div id="uploads" class="muted" style="margin-top:8px"></div>
+      <table id="inbox" style="margin-top:10px"></table>
+    </div>
+    <div id="proj" style="display:none">
+      <div class="card"><h2 id="p-title">Project</h2>
+        <div class="muted" id="p-meta"></div>
+        <table id="assets" style="margin-top:10px"></table>
+        <div class="steps" style="margin-top:14px">
+          <button onclick="act('analyze')">1 · Analyse media</button>
+          <select id="lang" style="width:auto"><option value="roman_urdu">Roman Urdu</option><option value="mixed">Roman Urdu + English</option><option value="english">English</option></select>
+          <button onclick="transcribe()">2 · Transcribe</button>
+          <button onclick="showBrief()">3 · Plan edit</button>
+          <button onclick="act('preview')">4 · Preview</button>
+          <button onclick="act('render')">5 · Final render</button>
+          <button class="ghost" onclick="act('export')">Export package</button>
+        </div>
+        <div id="brief" style="display:none;margin-top:14px">
+          <div class="row"><div><label>Title (optional)</label><input id="b-title"></div><div><label>Subtitle</label><input id="b-sub"></div></div>
+          <div class="row"><div><label>Speaker name (exactly as it should appear)</label><input id="b-name"></div><div><label>Speaker role</label><input id="b-role"></div></div>
+          <div class="row"><div><label>CTA headline</label><input id="b-cta"></div><div><label>CTA button</label><input id="b-btn"></div><div><label>Contact line</label><input id="b-contact"></div></div>
+          <div class="row"><div><label>Music</label><select id="b-music"><option value="">Imported track / none</option><option value="generated">Generated royalty-free ambient</option></select></div>
+            <div><label>Captions</label><select id="b-cap"><option value="">Profile default</option><option>word_highlight</option><option>phrase</option><option>word_by_word</option><option>karaoke</option></select></div>
+            <div><label>Tighten pauses</label><select id="b-tight"><option value="">Profile default</option><option value="1">Yes</option><option value="0">No</option></select></div></div>
+          <label>Exact script (optional – aligns captions precisely, used verbatim)</label><textarea id="b-script"></textarea>
+          <div style="margin-top:10px"><button onclick="plan()">Create editing plan</button></div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h2>Jobs</h2><div id="jobs" class="muted">No jobs yet.</div></div>
+        <div class="card"><h2>Preview / output</h2><video id="player" controls></video><div id="outs" style="margin-top:8px"></div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h2>Editing plan</h2><div id="plan" class="muted">No plan yet.</div></div>
+        <div class="card"><h2>Transcript</h2><div id="tr" class="muted">No transcript yet.</div></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+let cur=null, poll=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function api(path,body){const r=await fetch(path,body===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});return r.json();}
+async function loadSys(){const s=await api("/api/status");const el=$("sys");if(!s.ok){el.innerHTML=`<span class="pill bad">status error</span>`;return;}
+  el.innerHTML=`<span class="pill ${s.ffmpeg?'ok':'bad'}">FFmpeg ${s.ffmpeg?'✓':'missing'}</span><span class="pill ${s.transcription_engine&&s.whisper_model_cached?'ok':(s.transcription_engine?'':'bad')}">Speech ${esc(s.transcription_engine||'none')}${s.whisper_model_cached?'':' (model not downloaded)'}</span><span class="pill">Profile: ${esc(s.active_profile)}</span><span class="pill">${s.disk_free_gb} GB free</span>`;}
+async function loadProfiles(){const r=await api("/api/profiles");$("np-profile").innerHTML=r.profiles.map(p=>`<option value="${p.name}" ${p.active?'selected':''}>${esc(p.title)}</option>`).join("");}
+async function loadProjects(){const r=await api("/api/projects");$("plist").innerHTML=(r.projects||[]).slice().reverse().map(p=>`<div class="item ${cur===p.id?'sel':''}" onclick="openProject('${p.id}')"><b>${esc(p.name)}</b><div class="meta">${p.id} · ${esc(p.aspect)} · ${esc(p.status)} · ${p.asset_count} assets</div></div>`).join("")||'<div class="muted">No projects yet.</div>';}
+async function loadInbox(){const r=await api("/api/inbox");$("inbox").innerHTML="<tr><th>File</th><th>Type</th><th>MB</th><th></th></tr>"+(r.files||[]).map(f=>`<tr><td>${esc(f.name)}</td><td>${f.type}</td><td>${f.size_mb}</td><td>${cur?`<select onchange="importFile(this,'${esc(f.path).replace(/\\/g,'\\\\')}')"><option value="">Import as…</option><option value="video">Video</option><option value="voiceover">Voiceover</option><option value="music">Music (licensed)</option><option value="logo">Logo</option><option value="sfx">SFX</option><option value="image">Image</option><option value="lut">LUT</option></select>`:''}</td></tr>`).join("");}
+async function createProject(){const r=await api("/api/projects",{name:$("np-name").value||"Untitled",aspect:$("np-aspect").value,profile:$("np-profile").value});if(r.ok){await loadProjects();openProject(r.project.id);}else alert(r.error);}
+async function importFile(sel,path){if(!sel.value)return;const r=await api(`/api/projects/${cur}/import`,{kind:sel.value,paths:[path]});if(!r.ok)alert(r.error||JSON.stringify(r.errors));openProject(cur);}
+async function openProject(id){cur=id;$("proj").style.display="";const r=await api("/api/projects/"+id);if(!r.ok){alert(r.error);return;}const p=r.project;
+  $("p-title").textContent=p.name;$("p-meta").textContent=`${p.id} · ${p.aspect} · profile ${p.profile} · ${p.status}`;
+  $("assets").innerHTML="<tr><th>Asset</th><th>Kind</th><th>Name</th><th>Duration</th></tr>"+p.assets.map(a=>`<tr><td>${a.id}</td><td>${a.kind}</td><td>${esc(a.name)}</td><td>${a.duration?a.duration.toFixed(1)+'s':''}</td></tr>`).join("");
+  const outs=[...(r.previews||[]).map(x=>["preview",x]),...p.exports.map(x=>["final",x])];
+  $("outs").innerHTML=outs.map(([k,x])=>`<a href="#" style="color:var(--accent2);margin-right:12px" onclick="play('${x}');return false">${k}: ${esc(x.split('/').pop())}</a>`).join("")||'<span class="muted">No renders yet.</span>';
+  if(outs.length&&!$("player").src)play(outs[outs.length-1][1]);
+  if(r.plan){const pl=r.plan;$("plan").innerHTML=`<div>${pl.output.width}×${pl.output.height} · ${pl.duration.toFixed(1)}s · ${pl.segments.length} shots · ${pl.graphics.length} graphics · captions ${pl.captions.enabled?pl.captions.mode:'off'}</div>
+    <table style="margin-top:8px"><tr><th>At</th><th>Clip</th><th>Source</th><th>Why</th></tr>${pl.segments.map(s=>`<tr><td>${s.timeline_start.toFixed(1)}</td><td>${s.asset_id}${s.is_broll?' (B-roll)':''}</td><td>${s.src_in.toFixed(1)}–${s.src_out.toFixed(1)}</td><td class="muted">${esc(s.reason)}</td></tr>`).join("")}</table>
+    ${pl.missing_visuals.length?`<p class="err">Missing visuals: ${pl.missing_visuals.map(m=>esc(m.text)).join(" · ")}</p>`:''}${pl.notes.map(n=>`<p class="muted">• ${esc(n)}</p>`).join("")}`;} else $("plan").textContent="No plan yet.";
+  if(r.transcript){const t=r.transcript;$("tr").innerHTML=`<div>${t.word_count} words · ${esc(t.engine)} · ${t.needs_review?'<span class="err">needs review</span>':'<span class="okc">ok</span>'}</div><pre>${t.segments.map(s=>`[${s.t}] ${esc(s.text)}${s.flags.length?'  ⚠ '+s.flags.join(','):''}`).join("\n")}</pre>`;}
+  loadProjects();loadInbox();loadJobs();}
+function play(rel){$("player").src=`/files/${cur}/${rel}`;}
+async function act(a){const r=await api(`/api/projects/${cur}/${a}`,{});if(!r.ok&&!r.job_id){alert(r.error);}else if(a==="export"){alert("Exported to "+r.package);} startPoll();}
+async function transcribe(){let r=await api(`/api/projects/${cur}/transcribe`,{language_mode:$("lang").value});
+  if(r.needs_permission&&confirm(r.error+"\n\nDownload now?"))r=await api(`/api/projects/${cur}/transcribe`,{language_mode:$("lang").value,allow_model_download:true});
+  else if(!r.ok&&!r.needs_permission)alert(r.error);startPoll();}
+function showBrief(){$("brief").style.display=$("brief").style.display==="none"?"":"none";}
+async function plan(){const script=$("b-script").value.trim();if(script){const s=await api(`/api/projects/${cur}/script`,{script,language_mode:$("lang").value});if(!s.ok){alert(s.error);return;}}
+  const b={};if($("b-title").value)b.title=$("b-title").value;if($("b-sub").value)b.subtitle=$("b-sub").value;
+  if($("b-name").value)b.speaker={name:$("b-name").value,role:$("b-role").value};
+  if($("b-cta").value)b.cta={headline:$("b-cta").value,button:$("b-btn").value,contact:$("b-contact").value?[$("b-contact").value]:[]};
+  if($("b-music").value)b.music="generated";if($("b-cap").value)b.captions={mode:$("b-cap").value};if($("b-tight").value)b.tighten_pauses=$("b-tight").value==="1";
+  const r=await api(`/api/projects/${cur}/plan`,{brief:b});if(!r.ok)alert(r.error);openProject(cur);}
+async function loadJobs(){if(!cur)return false;const r=await api("/api/jobs?project="+cur);const js=r.jobs||[];
+  $("jobs").innerHTML=js.length?js.map(j=>`<div style="margin-bottom:10px"><b>${j.kind}</b> <span class="${j.status==='failed'?'err':j.status==='completed'?'okc':''}">${j.status}</span> <span class="muted">${esc(j.stage||'')}</span> ${j.status==='running'?`<button class="ghost" style="padding:2px 8px" onclick="cancelJob('${j.id}')">Cancel</button>`:''}
+    <div class="bar"><i style="width:${j.progress_percent}%"></i></div>${j.error?`<div class="err">${esc(j.error)}</div>`:''}</div>`).join(""):"No jobs yet.";
+  return js.some(j=>j.status==="running");}
+async function cancelJob(id){await api(`/api/jobs/${id}/cancel`,{});loadJobs();}
+function startPoll(){clearInterval(poll);poll=setInterval(async()=>{const running=await loadJobs();if(!running){clearInterval(poll);openProject(cur);}},1500);}
+async function upload(files){for(const f of files){$("uploads").textContent=`Uploading ${f.name}…`;const r=await fetch("/api/upload?name="+encodeURIComponent(f.name),{method:"POST",body:f});const j=await r.json();$("uploads").textContent=j.ok?`Uploaded ${j.name}`:j.error;}loadInbox();}
+const d=$("drop");d.ondragover=e=>{e.preventDefault();d.classList.add("over")};d.ondragleave=()=>d.classList.remove("over");
+d.ondrop=e=>{e.preventDefault();d.classList.remove("over");upload(e.dataTransfer.files)};$("file").onchange=e=>upload(e.target.files);
+loadSys();loadProfiles();loadProjects();loadInbox();
+</script>
+</body>
+</html>

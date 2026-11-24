@@ -1,0 +1,210 @@
+# AI Video Studio for Claude Desktop
+
+AI Video Studio turns Claude Desktop into a local, AI-controlled video editing workstation. Give it your
+footage and a voiceover, then say **"Edit this video professionally."** Claude then:
+
+1. analyses the media,
+2. transcribes the voiceover (Roman Urdu stays in Roman Urdu),
+3. plans an edit to your saved **Premium Commercial** profile,
+4. matches footage to the narration,
+5. adds captions, motion graphics, sound design and colour correction,
+6. renders and checks the final MP4.
+
+Everything runs on your PC with FFmpeg. There are no paid APIs and nothing is uploaded.
+
+```
+Claude Desktop ──MCP (stdio)──► studio.server ─► media analysis · transcription · planner
+                                              ─► renderer (FFmpeg) · captions (libass) · graphics (Pillow)
+                                              ─► audio engine · colour · validation · export
+Optional: start_dashboard.bat ─► http://127.0.0.1:8765 (same projects and jobs)
+```
+
+---
+
+## 1. Install (Windows 10/11)
+
+Requirements: **Python 3.10+** (3.12 recommended), **FFmpeg**, and **Claude Desktop**.
+
+1. Copy the `AI_Video_Studio` folder somewhere permanent, for example `C:\Tools\AI_Video_Studio`.
+2. Double-click **`install.bat`**. It:
+   - checks Python and FFmpeg (and offers `winget install Gyan.FFmpeg` if FFmpeg is missing),
+   - creates `.venv` and installs the dependencies, including `faster-whisper` for local speech-to-text,
+   - creates the studio folders and self-tests the MCP server,
+   - offers to register the server in Claude Desktop. It makes a timestamped backup of
+     `claude_desktop_config.json` and asks before changing it.
+3. **Fully quit Claude Desktop** (tray icon → Quit) and start it again. The studio's tools then
+   appear in the tools (🔨) menu.
+
+You can also run the steps separately: `scripts\check_env.py` (environment report),
+`setup_claude_desktop.bat` (MCP registration only), `run_tests.bat` (test suite).
+
+### Manual Claude Desktop configuration
+
+Edit `%APPDATA%\Claude\claude_desktop_config.json`. For the Microsoft Store build, the file is
+`%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\`. Add the block below, using **your**
+absolute paths:
+
+```json
+{
+  "mcpServers": {
+    "ai-video-studio": {
+      "command": "C:\\Tools\\AI_Video_Studio\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "studio.server"],
+      "env": { "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1" }
+    }
+  }
+}
+```
+
+`.venv\Scripts\python.exe scripts\configure_claude_desktop.py --print` prints the exact block for your PC.
+
+---
+
+## 2. Everyday use
+
+1. Put your files in the **inbox**: `Documents\AI_Video_Studio\inbox`. You can also give Claude full
+   paths, or drag files into the dashboard.
+   > Files you attach in the Claude chat are **not** saved to your disk, so the studio can't read
+   > them. Use the inbox or a file path instead.
+2. In Claude Desktop, type:
+
+   > Edit `clinic_raw.mp4` with `voiceover.wav` professionally as a 9:16 Reel. Doctor: Dr. Ayesha Khan,
+   > Consultant Dermatologist. CTA: "Book your consultation", 0300-1234567. Use generated music.
+
+3. Claude follows the built-in workflow:
+   `create_project → import → analyze_media → analyze_video_content (Claude looks at the scenes) →
+   transcribe_voiceover → create_editing_plan`. It shows you the plan, including any **missing visuals**.
+4. Approve the plan or ask for changes ("make captions phrase-style", "remove the stat card",
+   "use clip 2 for the reception part"). Claude then renders a **preview**, and after your OK, the
+   **final** video.
+5. Output goes to `Documents\AI_Video_Studio\projects\project_00X\exports\`:
+   `final_video.mp4`, `captions.srt`, `editing_timeline.json`, `project_settings.json` and `project_assets/`.
+
+The MCP prompt **"edit_video_professionally"** (in Claude's prompt menu) starts the same workflow
+from a form.
+
+### Talking-head videos
+
+If the voice is recorded **in** the video, import the same file as the voiceover. The planner switches to
+**sync mode**:
+
+- lip-sync is preserved,
+- pauses are tightened on picture and sound together (when enabled),
+- long takes get subtle alternating punch-ins,
+- other clips are used only as B-roll cut-aways that genuinely match the words.
+
+### Roman Urdu
+
+- `transcribe_voiceover(language_mode="roman_urdu" | "mixed" | "english")` keeps Latin script and never
+  translates.
+- Any Devanagari or Arabic-script output is flagged and kept out of captions.
+- Words the engine is unsure of are listed for review. Fix them with `correct_transcript`, or give Claude
+  the exact script, which `align_script` time-aligns to the voice. That gives the best caption accuracy,
+  and it works even without a speech engine.
+- The Whisper model (`small` ≈ 490 MB by default) is **downloaded only after you approve it**.
+
+---
+
+## 3. Tools exposed to Claude
+
+| Area | Tools |
+|---|---|
+| System | `get_system_status`, `list_inbox` |
+| Projects | `create_project`, `list_projects`, `get_project`, `export_project` |
+| Import | `import_video`, `import_voiceover`, `import_asset` (music, sfx, logo, image, broll, lut) |
+| Analysis | `analyze_media` (metadata, scenes, thumbnails, measurements), `analyze_video_content` (returns frames for Claude to see), `describe_scenes` |
+| Voice | `transcribe_voiceover`, `get_transcript`, `correct_transcript`, `align_script` |
+| Planning | `create_editing_plan`, `get_editing_plan`, `update_editing_plan` |
+| Elements | `generate_captions`, `add_graphics`, `add_background_music`, `add_sound_effects`, `list_sound_library` |
+| Render | `preview_video`, `execute_video_edit`, `render_video`, `get_render_status`, `cancel_render` |
+| Profiles | `load_editing_profile`, `update_editing_profile`, `set_active_profile` |
+
+Long operations run in the background. Claude polls `get_render_status`, and `cancel_render` stops
+FFmpeg safely. Rendered segments are cached, so a re-render after a small change, or after an
+interruption, only re-encodes what changed.
+
+---
+
+## 4. What the engine does
+
+- **Editing**: voice-led shots cut on word boundaries and paced by the profile. Each shot gets the best
+  scene by meaning (Claude's scene descriptions vs. the narration), quality, forward continuity and a
+  no-repeat penalty. When nothing matches, the gap is listed under `missing_visuals` with a suggestion;
+  nothing is fabricated.
+- **Reframing**: 16:9 → 9:16 / 1:1 uses a subject-aware crop (gradient + skin-tone weighting) or a
+  blurred-fill background. Footage is never stretched.
+- **Colour**: measured per shot and gentle: partial gray-world white balance, exposure via gamma,
+  contrast, highlight roll-off and shadow lift, a saturation cap, and shot matching to a shared reference.
+  An optional creative look and optional `.cube` LUT both have adjustable strength. There is no skin
+  smoothing.
+- **Captions**: ASS subtitles burned in with libass. Modes: phrase, word-highlight, word-by-word,
+  karaoke. Numbers and keywords are highlighted, placement respects mobile safe zones, and SRT is
+  exported too. Graphics automatically move out of the caption zone.
+- **Graphics** (Pillow, supersampled, animated by FFmpeg with eased slide/rise/fade): title card,
+  lower third, info card, stat card, callout, notification bubble, smartphone mockup, process steps,
+  checklist, location card, CTA end card, kinetic typography, logo bug, image card. They use the
+  profile's palette (turquoise, white, ice blue, navy) and the bundled Inter, Manrope and Montserrat
+  fonts (OFL).
+- **Audio**: voice chain (high-pass, adaptive FFT denoise, EQ, gentle compression, two-pass EBU R128
+  loudness to −14 LUFS, limiter), optional pause tightening with caption re-timing, music ducked under
+  the voice with a sidechain compressor, and fades.
+- **SFX and music**: built-in **procedurally generated, royalty-free** SFX (whooshes, UI taps,
+  notification chime, impacts, shimmer, riser, pop) and an optional generated ambient music bed. For
+  commercial music, import a track you own or have licensed.
+- **Export**: MP4 H.264 High, yuv420p, Rec.709 tags, AAC 48 kHz stereo, the original frame rate, and
+  `+faststart`. Every render is validated: the file opens, has the right dimensions and an audio stream,
+  matches the expected duration, and decodes fully without errors. Existing exports are never overwritten.
+
+## 5. Editing profiles
+
+The default is **PREMIUM COMMERCIAL EDITING PROFILE**. The others are `healthcare_dermatology`,
+`real_estate`, `product_ad`, `corporate`, `youtube`, `reels_shorts`, `educational` and `cinematic`.
+Change preferences permanently by asking Claude, for example: *"Update my profile: captions at the
+bottom, uppercase, music a bit quieter."* That calls `update_editing_profile`, and the overrides are
+saved in `Documents\AI_Video_Studio\profiles\`.
+
+## 6. Configuration
+
+Copy `config.example.json` to `Documents\AI_Video_Studio\config.json` to change any of these:
+
+- allowed input folders (the default is your user folder plus the inbox; anything else is refused),
+- FFmpeg paths,
+- Whisper model, device and compute type (CUDA is used automatically if available),
+- render quality,
+- vision provider: `claude` by default, or `ollama` for a local LLaVA-style model,
+- dashboard port.
+
+`.env.example` lists the environment variable overrides.
+
+## 7. Safety rules built in
+
+- Originals are never modified. Imports are hard-linked or copied into the project.
+- Exports are never overwritten without explicit confirmation.
+- Names, credentials, CTA text and statistics come only from your brief or from the spoken words.
+  Testimonials and before/after visuals are never invented.
+- The original voice is never replaced with synthetic speech, and a real person's identity is never
+  changed.
+- Music needs your licence confirmation (`i_confirm_license`). SFX are generated locally.
+- Model downloads need your approval. Nothing is uploaded or published.
+- The dashboard binds to 127.0.0.1 only, and paths are sandboxed to the allowed folders.
+
+## 8. Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Tools don't show in Claude | Fully quit Claude Desktop from the tray and restart. Check `%APPDATA%\Claude\logs\mcp-server-ai-video-studio.log`. |
+| "FFmpeg not found" | `winget install Gyan.FFmpeg`, then open a new terminal, or set `AIVS_FFMPEG` in `.env`. |
+| Transcription asks for permission | Expected: the Whisper model downloads once after you agree. |
+| "Access denied … outside the allowed folders" | Move the file to the inbox, or add its folder to `allowed_input_dirs`. |
+| Render failed | `get_render_status` shows the FFmpeg error. The full log is in `Documents\AI_Video_Studio\logs\studio.log`. |
+
+## 9. Limitations (honest)
+
+- **Scene understanding** comes from Claude looking at contact sheets (or a local Ollama vision
+  model). Automatic metrics cover brightness, colour, motion, sharpness, likely people and subject
+  position, but they don't recognise objects.
+- **Remotion is not used**. It needs Node.js plus a headless Chrome renderer, and companies need a
+  paid licence. The Pillow + FFmpeg + libass pipeline covers the required graphics with no extra
+  runtime.
+- **No synthetic B-roll is generated.** Missing visuals are reported with suggestions instead.
+- The location card is an illustrative map pattern, not a real map.

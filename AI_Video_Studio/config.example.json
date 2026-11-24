@@ -1,0 +1,30 @@
+{
+  "_comment": "Copy to <studio_home>/config.json (default: Documents\\AI_Video_Studio\\config.json) and edit. All keys optional.",
+  "allowed_input_dirs": ["C:\\Users\\YOUR_NAME\\Videos", "D:\\Footage"],
+  "import_mode": "link_or_copy",
+  "ffmpeg_path": "ffmpeg",
+  "ffprobe_path": "ffprobe",
+  "transcription": {
+    "engine": "auto",
+    "model": "small",
+    "device": "auto",
+    "compute_type": "auto",
+    "allow_model_download": false,
+    "low_confidence_threshold": 0.55
+  },
+  "vision": {
+    "provider": "claude",
+    "ollama_url": "http://127.0.0.1:11434",
+    "ollama_model": "llava"
+  },
+  "render": {
+    "video_codec": "libx264",
+    "preset": "medium",
+    "crf": 18,
+    "audio_bitrate": "192k",
+    "threads": 0,
+    "intermediate_crf": 14
+  },
+  "dashboard": {"host": "127.0.0.1", "port": 8765},
+  "log_level": "INFO"
+}
