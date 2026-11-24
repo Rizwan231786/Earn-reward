@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-video-studio"
+version = "1.0.0"
+description = "AI-controlled professional video editing workstation for Claude Desktop (local MCP server + FFmpeg)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["mcp>=1.9,<3", "pydantic>=2.6,<3", "Pillow>=10.0", "numpy>=1.26", "anyio>=4.0"]
+
+[project.optional-dependencies]
+transcribe = ["faster-whisper>=1.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+ai-video-studio-mcp = "studio.server:main"
+ai-video-studio-dashboard = "studio.dashboard.server:main"
+
+[tool.setuptools]
+packages = ["studio", "studio.dashboard"]
+
+[tool.setuptools.package-data]
+"studio.dashboard" = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
