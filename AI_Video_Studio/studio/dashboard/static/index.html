@@ -101,6 +101,11 @@ pre{white-space:pre-wrap;background:#081325;padding:10px;border-radius:10px;max-
       <div class="bar" id="ai-bar" style="display:none"><i id="ai-bar-i" style="width:0%"></i></div>
       <label>Claude's progress</label>
       <div id="ai-log">Claude's steps will appear here.</div>
+      <div id="ai-result" style="display:none;margin-top:14px">
+        <label>✨ Claude's video (made in this run)</label>
+        <div id="ai-result-info" class="muted"></div>
+        <video id="ai-player" controls style="margin-top:8px"></video>
+      </div>
       <div id="ai-follow" style="display:none;margin-top:12px">
         <label>Want changes? Tell Claude (it continues the same edit)</label>
         <div class="row"><div style="flex:4"><input id="ai-change" placeholder="e.g. captions thore bade karo, FREE wala scene 2 second lamba karo"></div>
@@ -116,7 +121,8 @@ pre{white-space:pre-wrap;background:#081325;padding:10px;border-radius:10px;max-
       <div class="card"><h2 id="p-title">Project</h2>
         <div class="muted" id="p-meta"></div>
         <table id="assets" style="margin-top:10px"></table>
-        <div class="steps" style="margin-top:14px">
+        <div class="muted" style="margin-top:14px">🛠 Manual tools (without Claude) – simple edit, no designed scenes:</div>
+        <div class="steps" style="margin-top:6px">
           <button onclick="act('analyze')">1 · Analyse media</button>
           <select id="lang" style="width:auto"><option value="roman_urdu">Roman Urdu</option><option value="mixed">Roman Urdu + English</option><option value="english">English</option></select>
           <button onclick="transcribe()">2 · Transcribe</button>
@@ -155,16 +161,19 @@ async function api(path,body){const r=await fetch(path,body===undefined?{}:{meth
 async function loadSys(){const s=await api("/api/status");const el=$("sys");if(!s.ok){el.innerHTML=`<span class="pill bad">status error</span>`;return;}
   el.innerHTML=`<span class="pill ${s.ffmpeg?'ok':'bad'}">FFmpeg ${s.ffmpeg?'✓':'missing'}</span><span class="pill ${s.transcription_engine&&s.whisper_model_cached?'ok':(s.transcription_engine?'':'bad')}">Speech ${esc(s.transcription_engine||'none')}${s.whisper_model_cached?'':' (model not downloaded)'}</span><span class="pill">Profile: ${esc(s.active_profile)}</span><span class="pill">${s.disk_free_gb} GB free</span>`;}
 async function loadProfiles(){const r=await api("/api/profiles");$("np-profile").innerHTML=r.profiles.map(p=>`<option value="${p.name}" ${p.active?'selected':''}>${esc(p.title)}</option>`).join("");}
-async function loadProjects(){const r=await api("/api/projects");$("plist").innerHTML=(r.projects||[]).slice().reverse().map(p=>`<div class="item ${cur===p.id?'sel':''}" onclick="openProject('${p.id}')"><b>${esc(p.name)}</b><div class="meta">${p.id} · ${esc(p.aspect)} · ${esc(p.status)} · ${p.asset_count} assets</div></div>`).join("")||'<div class="muted">No projects yet.</div>';}
+async function loadProjects(){const r=await api("/api/projects");$("plist").innerHTML=(r.projects||[]).slice().reverse().map(p=>`<div class="item ${cur===p.id?'sel':''}" onclick="openProject('${p.id}')"><b>${esc(p.name)}</b>${p.made_by_claude?' <span class="badge" style="color:var(--accent2)">✨ Claude</span>':''}<div class="meta">${p.id} · ${esc(p.aspect)} · ${esc(p.status)} · ${p.asset_count} assets</div></div>`).join("")||'<div class="muted">No projects yet.</div>';}
 async function loadInbox(){const r=await api("/api/inbox");$("inbox").innerHTML="<tr><th>File</th><th>Type</th><th>MB</th><th></th></tr>"+(r.files||[]).map(f=>`<tr><td>${esc(f.name)}</td><td>${f.type}</td><td>${f.size_mb}</td><td>${cur?`<select onchange="importFile(this,'${esc(f.path).replace(/\\/g,'\\\\')}')"><option value="">Import as…</option><option value="video">Video</option><option value="voiceover">Voiceover</option><option value="music">Music (licensed)</option><option value="logo">Logo</option><option value="sfx">SFX</option><option value="image">Image</option><option value="lut">LUT</option></select>`:''}</td></tr>`).join("");}
 async function createProject(){const r=await api("/api/projects",{name:$("np-name").value||"Untitled",aspect:$("np-aspect").value,profile:$("np-profile").value});if(r.ok){await loadProjects();openProject(r.project.id);}else alert(r.error);}
 async function importFile(sel,path){if(!sel.value)return;const r=await api(`/api/projects/${cur}/import`,{kind:sel.value,paths:[path]});if(!r.ok)alert(r.error||JSON.stringify(r.errors));openProject(cur);}
-async function openProject(id){cur=id;$("proj").style.display="";const r=await api("/api/projects/"+id);if(!r.ok){alert(r.error);return;}const p=r.project;
+async function openProject(id,forcePlay){cur=id;$("proj").style.display="";const r=await api("/api/projects/"+id);if(!r.ok){alert(r.error);return;}const p=r.project;
   $("p-title").textContent=p.name;$("p-meta").textContent=`${p.id} · ${p.aspect} · profile ${p.profile} · ${p.status}`;
   $("assets").innerHTML="<tr><th>Asset</th><th>Kind</th><th>Name</th><th>Duration</th></tr>"+p.assets.map(a=>`<tr><td>${a.id}</td><td>${a.kind}</td><td>${esc(a.name)}</td><td>${a.duration?a.duration.toFixed(1)+'s':''}</td></tr>`).join("");
-  const outs=[...(r.previews||[]).map(x=>["preview",x]),...p.exports.map(x=>["final",x])];
+  const byOut={};(r.renders||[]).forEach(x=>byOut[x.output]=x);
+  const tag=x=>byOut[x]&&byOut[x].by==="claude"?"✨ Claude":"🛠 manual";
+  const outs=[...(r.previews||[]).map(x=>["preview · "+tag(x),x]),...p.exports.map(x=>["final · "+tag(x),x])]
+    .sort((a,b)=>((byOut[a[1]]||{}).at||"").localeCompare((byOut[b[1]]||{}).at||""));
   $("outs").innerHTML=outs.map(([k,x])=>`<a href="#" style="color:var(--accent2);margin-right:12px" onclick="play('${x}');return false">${k}: ${esc(x.split('/').pop())}</a>`).join("")||'<span class="muted">No renders yet.</span>';
-  if(outs.length&&!$("player").src)play(outs[outs.length-1][1]);
+  if(outs.length&&(forcePlay||!$("player").src))play(outs[outs.length-1][1]);
   if(r.plan){const pl=r.plan;$("plan").innerHTML=`<div>${pl.output.width}×${pl.output.height} · ${pl.duration.toFixed(1)}s · ${pl.segments.length} shots · ${pl.graphics.length} graphics · captions ${pl.captions.enabled?pl.captions.mode:'off'}</div>
     <table style="margin-top:8px"><tr><th>At</th><th>Clip</th><th>Source</th><th>Why</th></tr>${pl.segments.map(s=>`<tr><td>${s.timeline_start.toFixed(1)}</td><td>${s.asset_id}${s.is_broll?' (B-roll)':''}</td><td>${s.src_in.toFixed(1)}–${s.src_out.toFixed(1)}</td><td class="muted">${esc(s.reason)}</td></tr>`).join("")}</table>
     ${pl.missing_visuals.length?`<p class="err">Missing visuals: ${pl.missing_visuals.map(m=>esc(m.text)).join(" · ")}</p>`:''}${pl.notes.map(n=>`<p class="muted">• ${esc(n)}</p>`).join("")}`;} else $("plan").textContent="No plan yet.";
@@ -210,13 +219,18 @@ async function aiStart(req){const r=await api("/api/ai/run",req);if(!r.ok){alert
   clearInterval(aiPoll);aiPoll=setInterval(aiTick,1500);}
 function aiRun(){const req=aiReq();if(!req.files.length&&!req.instructions.trim()){alert("Choose files and write what you want.");return;}aiStart(req);}
 function aiFollow(){const t=$("ai-change").value.trim();if(!t||!aiSession){return;}aiStart({session_id:aiSession,project_id:aiProject,instructions:t,final:$("ai-final").checked});$("ai-change").value="";}
+function aiShowResult(r){const outs=r.outputs||[];$("ai-result").style.display="";
+  if(!outs.length){$("ai-result-info").innerHTML='<span class="err">⚠ Claude finished but did not render a new video in this run. Type "render a preview" in the changes box below.</span>';$("ai-player").style.display="none";return;}
+  const last=outs[outs.length-1];$("ai-player").style.display="";
+  $("ai-result-info").innerHTML=`Project <b>${esc(r.project_id)}</b> · ${outs.map(o=>`<a href="#" style="color:var(--accent2)" onclick="$('ai-player').src='/files/${r.project_id}/${o.output}';return false">${esc(o.quality)}: ${esc(o.output.split('/').pop())}</a>`).join(" · ")}`;
+  $("ai-player").src=`/files/${r.project_id}/${last.output}`;}
 async function aiCancel(){if(aiJob)await api(`/api/jobs/${aiJob}/cancel`,{});}
 async function aiTick(){const r=await api(`/api/ai/log?job=${aiJob}&since=${aiNext}`);if(!r.ok)return;
   const box=$("ai-log");for(const ln of r.lines)box.textContent+=ln+"\n";aiNext=r.next;box.scrollTop=box.scrollHeight;
   const j=r.job||{};$("ai-bar-i").style.width=(j.progress_percent||0)+"%";$("ai-progress").textContent=`${j.status||""} · ${j.stage||""} · ${j.progress_percent||0}%`;
   if(r.session_id)aiSession=r.session_id;if(r.project_id)aiProject=r.project_id;
   if(j.status&&j.status!=="running"){clearInterval(aiPoll);$("ai-go").disabled=false;$("ai-cancel").style.display="none";
-    if(j.status==="completed"){$("ai-follow").style.display="";if(aiProject){await loadProjects();openProject(aiProject);}}
+    if(j.status==="completed"){$("ai-follow").style.display="";aiShowResult(r);if(aiProject){await loadProjects();openProject(aiProject,true);}}
     else if(j.error){box.textContent+="\n❌ "+j.error+"\n";}}}
 aiStatus();aiProfiles();aiFiles();
 
