@@ -1,0 +1,14 @@
+{
+  "name": "patch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Patch — a community platform for builders",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --no-warnings server/server.js",
+    "dev": "SEED_DEMO=1 node --no-warnings server/server.js",
+    "create-admin": "node --no-warnings server/cli.js create-admin",
+    "cli": "node --no-warnings server/cli.js"
+  }
+}
