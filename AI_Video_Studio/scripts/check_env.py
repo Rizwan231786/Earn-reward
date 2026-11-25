@@ -27,7 +27,9 @@ def claude_configs() -> list[Path]:
     if os.environ.get("APPDATA"):
         c.append(Path(os.environ["APPDATA"]) / "Claude" / "claude_desktop_config.json")
     if os.environ.get("LOCALAPPDATA"):
-        c += list((Path(os.environ["LOCALAPPDATA"]) / "Packages").glob("Claude_*/LocalCache/Roaming/Claude/claude_desktop_config.json"))
+        for pkg in (Path(os.environ["LOCALAPPDATA"]) / "Packages").glob("Claude_*"):
+            print(f"Claude Desktop: Microsoft Store version detected ({pkg.name})")
+            c.append(pkg / "LocalCache" / "Roaming" / "Claude" / "claude_desktop_config.json")
     c.append(Path.home() / "Library/Application Support/Claude/claude_desktop_config.json")
     return c
 

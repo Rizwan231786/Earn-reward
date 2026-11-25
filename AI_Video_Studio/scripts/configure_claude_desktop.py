@@ -33,9 +33,10 @@ def venv_python() -> Path:
 
 def config_path() -> Path:
     if os.environ.get("LOCALAPPDATA"):  # Microsoft Store (MSIX) build
-        hits = list((Path(os.environ["LOCALAPPDATA"]) / "Packages").glob("Claude_*/LocalCache/Roaming/Claude"))
-        if hits:
-            return hits[0] / "claude_desktop_config.json"
+        # The Store app keeps its config inside its package folder; that folder may not exist yet on a fresh install.
+        pkgs = sorted((Path(os.environ["LOCALAPPDATA"]) / "Packages").glob("Claude_*"))
+        if pkgs:
+            return pkgs[0] / "LocalCache" / "Roaming" / "Claude" / "claude_desktop_config.json"
     if os.environ.get("APPDATA"):
         return Path(os.environ["APPDATA"]) / "Claude" / "claude_desktop_config.json"
     if sys.platform == "darwin":
