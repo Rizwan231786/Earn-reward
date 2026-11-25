@@ -185,6 +185,25 @@ translated the speech. Re-run with `language_mode="roman_urdu_via_urdu"`: Whispe
 translates, and Claude converts every line to Roman Urdu with `romanize_transcript`, keeping the timing. The studio
 warns automatically when a transcript looks translated.
 
+## 4c. AI Editor in the dashboard (Claude does the whole edit)
+
+Open the dashboard (`start_dashboard.bat` → http://127.0.0.1:8765). The **🎬 AI Editor** card at the top lets you:
+
+1. tick the inbox files and say what each one is,
+2. write, in any language, what video you want,
+3. fill in the facts that may appear on screen (name, credentials, WhatsApp),
+4. click **✨ Create with Claude**.
+
+Behind the scenes the dashboard runs **Claude Code** headlessly (`claude -p`) on **your Claude subscription**. It
+removes `ANTHROPIC_API_KEY` from that run, so nothing is billed to API credits by accident. Claude gets *only* the
+studio's tools (no shell, no file editing). It works through the full workflow (analyse, transcribe and romanize,
+plan, storyboard, preview, and optionally the final render and export), and its steps stream live into the
+dashboard. Type changes in **"Want changes?"** and Claude continues the same edit.
+
+One-time setup: install Claude Code (PowerShell: `irm https://claude.ai/install.ps1 | iex`), then run
+`claude auth login` and sign in with your Claude account. The card shows whether you are logged in.
+Keep the dashboard window open while Claude works.
+
 ## 5. Editing profiles
 
 The default is **PREMIUM COMMERCIAL EDITING PROFILE**. The others are `healthcare_dermatology`,

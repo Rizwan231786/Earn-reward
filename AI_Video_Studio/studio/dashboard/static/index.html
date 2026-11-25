@@ -44,6 +44,15 @@ video{width:100%;max-height:520px;background:#000;border-radius:12px}
 .muted{color:var(--muted)} .err{color:var(--danger)} .okc{color:var(--ok)}
 pre{white-space:pre-wrap;background:#081325;padding:10px;border-radius:10px;max-height:260px;overflow:auto;font-size:12px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+.ai{border-color:rgba(46,230,214,.45);background:linear-gradient(180deg,#0E2238,#0B1729)}
+.ai h2{font-size:15px}
+.files label{display:flex;gap:8px;align-items:center;color:var(--text);font-size:13px;margin:4px 0}
+.files input[type=checkbox]{width:auto}
+.files select{width:auto;padding:4px 8px;font-size:12px}
+#ai-log{background:#06101F;border:1px solid var(--line);border-radius:10px;padding:10px;height:260px;overflow:auto;
+  font:12px/1.55 ui-monospace,Consolas,monospace;white-space:pre-wrap}
+.big{font-size:15px;padding:12px 18px}
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;background:var(--panel2);border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -61,6 +70,43 @@ pre{white-space:pre-wrap;background:#081325;padding:10px;border-radius:10px;max-
     <div class="card"><h2>Projects</h2><div id="plist" class="plist"></div></div>
   </aside>
   <section>
+    <div class="card ai"><h2>🎬 AI Editor · Claude makes the whole video</h2>
+      <div id="ai-status" class="muted">Checking Claude…</div>
+      <label>1 · Choose files from the inbox</label>
+      <div id="ai-files" class="files muted">Loading inbox…</div>
+      <label>2 · What kind of video do you want? (any language)</label>
+      <textarea id="ai-text" placeholder="e.g. Meri reference wali ad jaisi 9:16 Reel banao: shuru mein hook scene, doctor ke shots par counter aur FREE card, aakhir mein WhatsApp wala end card. Captions Roman Urdu mein."></textarea>
+      <div class="row">
+        <div><label>Format</label><select id="ai-aspect"><option value="9:16">9:16 Reels / Shorts</option><option value="16:9">16:9 YouTube</option><option value="1:1">1:1 Square</option><option value="4:5">4:5 Feed</option></select></div>
+        <div><label>Style</label><select id="ai-profile"></select></div>
+        <div><label>Voice language</label><select id="ai-lang"><option value="roman_urdu_via_urdu">Roman Urdu (most accurate)</option><option value="mixed">Roman Urdu + English</option><option value="english">English</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>Speaker name (exact)</label><input id="ai-name" placeholder="Dr. Shahzad"></div>
+        <div><label>Title / credentials</label><input id="ai-role" placeholder="Consultant Dermatologist, 17+ years"></div>
+        <div><label>WhatsApp / phone</label><input id="ai-phone" placeholder="0325 4469908"></div>
+      </div>
+      <label>Other facts allowed on screen (offer, location…) — only real facts</label>
+      <input id="ai-extra" placeholder="First online consultation FREE">
+      <div class="row" style="margin-top:10px;align-items:center">
+        <label style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" id="ai-dl" style="width:auto" checked> Allow speech-model download (once, ~490 MB)</label>
+        <label style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" id="ai-final" style="width:auto"> Also render final video &amp; export</label>
+        <label style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" id="ai-music" style="width:auto" checked> Royalty-free background music</label>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="big" id="ai-go" onclick="aiRun()">✨ Create with Claude</button>
+        <button class="ghost" id="ai-cancel" onclick="aiCancel()" style="display:none">Stop</button>
+        <span id="ai-progress" class="badge" style="display:none"></span>
+      </div>
+      <div class="bar" id="ai-bar" style="display:none"><i id="ai-bar-i" style="width:0%"></i></div>
+      <label>Claude's progress</label>
+      <div id="ai-log">Claude's steps will appear here.</div>
+      <div id="ai-follow" style="display:none;margin-top:12px">
+        <label>Want changes? Tell Claude (it continues the same edit)</label>
+        <div class="row"><div style="flex:4"><input id="ai-change" placeholder="e.g. captions thore bade karo, FREE wala scene 2 second lamba karo"></div>
+        <div style="flex:1"><button onclick="aiFollow()">Apply changes</button></div></div>
+      </div>
+    </div>
     <div class="card"><h2>Upload to inbox</h2>
       <div id="drop" class="drop">Drop videos, voiceovers, music, logos here, or <input type="file" id="file" multiple style="width:auto;display:inline"></div>
       <div id="uploads" class="muted" style="margin-top:8px"></div>
@@ -142,10 +188,38 @@ async function loadJobs(){if(!cur)return false;const r=await api("/api/jobs?proj
   return js.some(j=>j.status==="running");}
 async function cancelJob(id){await api(`/api/jobs/${id}/cancel`,{});loadJobs();}
 function startPoll(){clearInterval(poll);poll=setInterval(async()=>{const running=await loadJobs();if(!running){clearInterval(poll);openProject(cur);}},1500);}
-async function upload(files){for(const f of files){$("uploads").textContent=`Uploading ${f.name}…`;const r=await fetch("/api/upload?name="+encodeURIComponent(f.name),{method:"POST",body:f});const j=await r.json();$("uploads").textContent=j.ok?`Uploaded ${j.name}`:j.error;}loadInbox();}
+async function upload(files){for(const f of files){$("uploads").textContent=`Uploading ${f.name}…`;const r=await fetch("/api/upload?name="+encodeURIComponent(f.name),{method:"POST",body:f});const j=await r.json();$("uploads").textContent=j.ok?`Uploaded ${j.name}`:j.error;}loadInbox();aiFiles();}
 const d=$("drop");d.ondragover=e=>{e.preventDefault();d.classList.add("over")};d.ondragleave=()=>d.classList.remove("over");
 d.ondrop=e=>{e.preventDefault();d.classList.remove("over");upload(e.dataTransfer.files)};$("file").onchange=e=>upload(e.target.files);
 loadSys();loadProfiles();loadProjects();loadInbox();
+// ---------------- AI Editor ----------------
+let aiJob=null, aiNext=0, aiPoll=null, aiSession=null, aiProject=null, inboxFiles=[];
+async function aiStatus(){const r=await api("/api/ai/status");const el=$("ai-status");
+  el.innerHTML=r.ok?`<span class="okc">● ${esc(r.message)}</span>`:`<span class="err">● ${esc(r.message)}</span>`;$("ai-go").disabled=!r.ok;}
+async function aiFiles(){const r=await api("/api/inbox");inboxFiles=(r.files||[]).filter(f=>f.type==="video"||f.type==="audio"||f.type==="image");
+  $("ai-files").innerHTML=inboxFiles.length?inboxFiles.map((f,i)=>`<label><input type="checkbox" id="aif${i}" ${f.type!=="image"?"checked":""}> ${esc(f.name)} <span class="muted">(${f.type}, ${f.size_mb} MB)</span>
+    <select id="air${i}">${f.type==="video"?'<option value="video (voice inside the video)">video – voice inside</option><option value="video footage / b-roll (no voice)">video – b-roll only</option>':f.type==="audio"?'<option value="voiceover">voiceover</option><option value="licensed background music">music (licensed)</option>':'<option value="logo">logo</option><option value="reference image">image</option>'}</select></label>`).join("")
+    :'<span class="muted">Inbox is empty – drop files in the upload box below first.</span>';}
+async function aiProfiles(){const r=await api("/api/profiles");$("ai-profile").innerHTML=r.profiles.map(p=>`<option value="${p.name}" ${p.name==="motion_explainer"?"selected":""}>${esc(p.title)}</option>`).join("");}
+function aiReq(){const files=inboxFiles.map((f,i)=>$("aif"+i)&&$("aif"+i).checked?{name:f.name,type:f.type,role:$("air"+i).value}:null).filter(Boolean);
+  return {files,instructions:$("ai-text").value,aspect:$("ai-aspect").value,profile:$("ai-profile").value,language_mode:$("ai-lang").value,
+    facts:{"Speaker name":$("ai-name").value,"Title / credentials":$("ai-role").value,"WhatsApp / phone":$("ai-phone").value,"Other facts":$("ai-extra").value},
+    allow_download:$("ai-dl").checked,final:$("ai-final").checked,music:$("ai-music").checked?"royalty-free generated ambient bed (music: generated)":""};}
+async function aiStart(req){const r=await api("/api/ai/run",req);if(!r.ok){alert(r.error);return;}
+  aiJob=r.job_id;aiNext=0;$("ai-log").textContent="";$("ai-go").disabled=true;$("ai-cancel").style.display="";$("ai-bar").style.display="";$("ai-progress").style.display="";
+  clearInterval(aiPoll);aiPoll=setInterval(aiTick,1500);}
+function aiRun(){const req=aiReq();if(!req.files.length&&!req.instructions.trim()){alert("Choose files and write what you want.");return;}aiStart(req);}
+function aiFollow(){const t=$("ai-change").value.trim();if(!t||!aiSession){return;}aiStart({session_id:aiSession,project_id:aiProject,instructions:t,final:$("ai-final").checked});$("ai-change").value="";}
+async function aiCancel(){if(aiJob)await api(`/api/jobs/${aiJob}/cancel`,{});}
+async function aiTick(){const r=await api(`/api/ai/log?job=${aiJob}&since=${aiNext}`);if(!r.ok)return;
+  const box=$("ai-log");for(const ln of r.lines)box.textContent+=ln+"\n";aiNext=r.next;box.scrollTop=box.scrollHeight;
+  const j=r.job||{};$("ai-bar-i").style.width=(j.progress_percent||0)+"%";$("ai-progress").textContent=`${j.status||""} · ${j.stage||""} · ${j.progress_percent||0}%`;
+  if(r.session_id)aiSession=r.session_id;if(r.project_id)aiProject=r.project_id;
+  if(j.status&&j.status!=="running"){clearInterval(aiPoll);$("ai-go").disabled=false;$("ai-cancel").style.display="none";
+    if(j.status==="completed"){$("ai-follow").style.display="";if(aiProject){await loadProjects();openProject(aiProject);}}
+    else if(j.error){box.textContent+="\n❌ "+j.error+"\n";}}}
+aiStatus();aiProfiles();aiFiles();
+
 </script>
 </body>
 </html>
