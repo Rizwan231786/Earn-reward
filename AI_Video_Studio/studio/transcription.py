@@ -262,7 +262,14 @@ def transcribe(project: Project, language_mode: str = "roman_urdu", model: str |
     if engine == "faster-whisper":
         from faster_whisper import WhisperModel
         device = cfg["device"] if cfg["device"] != "auto" else "auto"
-        compute = cfg["compute_type"] if cfg["compute_type"] != "auto" else "default"
+        compute = cfg["compute_type"]
+        if compute == "auto":  # int8 is the fastest accurate mode on CPUs (Intel/AMD); float16 on NVIDIA GPUs
+            try:
+                import ctranslate2
+                gpu = device != "cpu" and ctranslate2.get_cuda_device_count() > 0
+            except Exception:  # noqa: BLE001
+                gpu = False
+            compute = "float16" if gpu else "int8"
         wm = WhisperModel(model, device=device, compute_type=compute, download_root=str(s.models_dir),
                           local_files_only=not (allow_model_download or cfg.get("allow_model_download")))
         segments, info = wm.transcribe(str(wav), language=lang, task="transcribe", initial_prompt=prompt,
