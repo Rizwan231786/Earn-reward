@@ -165,6 +165,7 @@ class Project:
             "has_transcript": self.path("audio", "transcript.json").exists(),
             "has_plan": self.path("editing_timeline.json").exists(),
             "exports": [self.rel(p) for p in sorted(self.path("exports").glob("*.mp4"))],
+            "made_by_claude": bool(self.data.get("made_by_claude")),
         }
 
 

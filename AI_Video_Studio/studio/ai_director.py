@@ -24,6 +24,7 @@ from typing import Any
 from . import jobs as jobs_mod
 from .config import get_settings
 from .ffmpeg_utils import CancelledError
+from .projects import load_project, now_iso
 
 log = logging.getLogger("studio.ai_director")
 _CREATE_FLAGS = 0x08000000 if sys.platform == "win32" else 0
@@ -312,7 +313,8 @@ def start(req: dict) -> dict:
     cmd = build_command(exe, req)
     home = get_settings().home
     state: dict[str, Any] = {"lines": [], "progress": 0.0, "stage": "starting Claude", "session_id": req.get("session_id"),
-                             "project_id": req.get("project_id"), "prompt": prompt, "started": time.time()}
+                             "project_id": req.get("project_id"), "prompt": prompt, "started": time.time(),
+                             "started_iso": now_iso()}
 
     def work(ctx: jobs_mod.JobContext):
         _runs[ctx.id] = state
@@ -357,18 +359,48 @@ def start(req: dict) -> dict:
         proc.wait()
         if ctx.cancel_event.is_set():
             raise CancelledError("Cancelled by user")
+        outputs = tag_claude_outputs(state)
         if not state.get("finished"):
             tail = "".join(err_lines[-15:]).strip()
             raise RuntimeError(f"Claude Code stopped unexpectedly (exit {proc.returncode}). {tail[-800:]}")
         if state.get("is_error"):
             raise RuntimeError(state.get("result_text") or "Claude could not finish the edit - see the log.")
+        if outputs:
+            state["lines"].append("🎬 Claude made: " + ", ".join(f"{o['quality']} → {o['output']}" for o in outputs))
+        else:
+            state["lines"].append("⚠ Claude finished but did not render a new video in this run. "
+                                  "Ask it below: 'render a preview'.")
         ctx.update(stage="done", progress=1.0, force=True)
-        return {"session_id": state.get("session_id"), "project_id": state.get("project_id"),
+        return {"outputs": outputs, "session_id": state.get("session_id"), "project_id": state.get("project_id"),
                 "result": state.get("result_json"), "summary": state.get("result_text"), "steps": state.get("num_turns")}
 
     job_id = jobs_mod.start_job("ai_edit", req.get("project_id"), work)
     _runs[job_id] = state
     return {"ok": True, "job_id": job_id}
+
+
+def tag_claude_outputs(state: dict) -> list[dict]:
+    """Mark the renders produced during this run as made by Claude (so the dashboard can tell them apart)."""
+    pid = state.get("project_id") or (state.get("result_json") or {}).get("project_id")
+    if not pid:
+        return []
+    try:
+        p = load_project(str(pid))
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for r in p.data.get("renders", []):
+        if r.get("at", "") >= state.get("started_iso", "9999"):
+            r["by"] = "claude"
+            r["session_id"] = state.get("session_id")
+            out.append({"quality": r.get("quality"), "output": r.get("output"), "at": r.get("at"), "valid": r.get("valid")})
+    if out:
+        p.data["made_by_claude"] = True
+        p.data["claude_session_id"] = state.get("session_id")
+        p.log_event(f"Claude rendered {len(out)} video(s)")
+        p.save()
+    state["outputs"] = out
+    return out
 
 
 def run_state(job_id: str, since: int = 0) -> dict:
@@ -377,4 +409,5 @@ def run_state(job_id: str, since: int = 0) -> dict:
     lines = st.get("lines", [])
     return {"ok": bool(j), "job": j, "lines": lines[since:], "next": len(lines), "session_id": st.get("session_id"),
             "project_id": st.get("project_id") or (j.get("result") or {}).get("project_id"),
-            "result": st.get("result_json"), "summary": st.get("result_text")}
+            "result": st.get("result_json"), "summary": st.get("result_text"),
+            "outputs": st.get("outputs") or (j.get("result") or {}).get("outputs") or []}

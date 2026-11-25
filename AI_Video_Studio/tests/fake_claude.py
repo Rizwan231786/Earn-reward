@@ -42,7 +42,9 @@ def main():
             async with ClientSession(r, w) as s:
                 await s.initialize()
                 calls = [("get_system_status", {})]
-                if resume:
+                if os.environ.get("FAKE_RENDER_PROJECT"):  # manual UI check: really render a preview
+                    calls.append(("preview_video", {"project_id": os.environ["FAKE_RENDER_PROJECT"], "wait_seconds": 50}))
+                elif resume:
                     calls.append(("list_projects", {}))
                 else:
                     calls.append(("create_project", {"name": "AI test", "aspect": "9:16", "profile": "motion_explainer"}))
@@ -57,6 +59,8 @@ def main():
                     d = json.loads(text)
                     if name == "create_project":
                         pid = d["project"]["id"]
+                    if name == "preview_video":
+                        pid = args["project_id"]
                     emit({"type": "user", "session_id": sid, "message": {"content": [
                         {"type": "tool_result", "tool_use_id": tid, "content": [{"type": "text", "text": text}]}]}})
                 return pid

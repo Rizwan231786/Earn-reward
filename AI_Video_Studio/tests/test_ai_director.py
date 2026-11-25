@@ -72,3 +72,29 @@ def test_not_logged_in_is_reported(monkeypatch, studio_home, tmp_path):
     st = ai_director.claude_status()
     assert not st["ok"]
     assert "error" in ai_director.start({"instructions": "x"})
+
+
+def test_run_without_render_warns(fake_claude, studio_home):
+    from studio import ai_director, jobs
+    r = ai_director.start({"files": [], "instructions": "make a reel"})
+    jobs.wait_for(r["job_id"], 120)
+    st = ai_director.run_state(r["job_id"])
+    assert st["outputs"] == []
+    assert any("did not render a new video" in ln for ln in st["lines"])
+
+
+def test_tag_claude_outputs_only_marks_this_runs_renders(studio_home):
+    from studio import ai_director, projects
+    p = projects.create_project("tag test")
+    p.data["renders"] = [{"at": "2000-01-01T00:00:00+00:00", "quality": "preview", "output": "previews/old_manual.mp4"}]
+    p.save()
+    state = {"project_id": p.id, "session_id": "s9", "started_iso": projects.now_iso()}
+    p = projects.load_project(p.id)
+    p.data["renders"].append({"at": projects.now_iso(), "quality": "preview", "output": "previews/claude.mp4"})
+    p.save()
+    outs = ai_director.tag_claude_outputs(state)
+    assert [o["output"] for o in outs] == ["previews/claude.mp4"]
+    p = projects.load_project(p.id)
+    by = {r["output"]: r.get("by") for r in p.data["renders"]}
+    assert by == {"previews/old_manual.mp4": None, "previews/claude.mp4": "claude"}
+    assert p.summary()["made_by_claude"] is True
