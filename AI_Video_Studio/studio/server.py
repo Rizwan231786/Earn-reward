@@ -49,6 +49,12 @@ DEFAULT WORKFLOW when the user says "edit this video professionally" (no long pr
  7. preview_video for review, then render_video (final). Poll get_render_status until completed; report the MP4 path.
  8. export_project to bundle final MP4, SRT, timeline JSON and settings.
 
+DESIGNED / MOTION-EXPLAINER STYLE (profile motion_explainer, or whenever the user wants a designed ad like their
+reference with full-screen motion-graphics scenes): after create_editing_plan, read load_editing_profile("motion_explainer")
+storyboard_guide, then call set_storyboard with scenes (scene_headline, scene_phone, scene_flow, scene_steps, scene_icons,
+scene_cards, scene_cta) and overlays (label_pill, counter, credential_card, headline_card, chat_bubbles), each timed with
+at_text = an exact 3-6 word phrase from the transcript. Check key scenes with preview_graphic, then preview_video.
+
 PERMANENT STYLE: the active editing profile (default PREMIUM COMMERCIAL: turquoise/white/ice-blue/navy, Inter/Manrope/Montserrat,
 clean lower thirds, kinetic typography, elegant transitions, natural skin tones, subtle motion, voice always dominant).
 Use load_editing_profile to read it; update_editing_profile to change preferences permanently.
@@ -332,11 +338,13 @@ def describe_scenes(project_id: str, asset_id: str, descriptions: list[dict]) ->
 def transcribe_voiceover(project_id: str, language_mode: str = "roman_urdu", model: str = "",
                          allow_model_download: bool = False, wait_seconds: float = 45) -> dict:
     """Transcribe the voiceover with word-level timestamps. language_mode: roman_urdu | mixed (Roman Urdu + English) |
-    english | auto. Roman Urdu stays in Latin script, never translated, never Devanagari. Low-confidence words are flagged.
+    english | auto | roman_urdu_via_urdu (most faithful for Urdu speech: Whisper writes Urdu script, then YOU convert every
+    segment to Roman Urdu with romanize_transcript). If a roman_urdu result reads like English sentences where the
+    speaker actually spoke Urdu (it was translated), re-run with roman_urdu_via_urdu. Roman Urdu stays in Latin script, never translated, never Devanagari. Low-confidence words are flagged.
     If the Whisper model is not downloaded, ask the user before passing allow_model_download=true."""
     p = projects.load_project(project_id)
-    if language_mode not in ("roman_urdu", "mixed", "english", "auto"):
-        raise ValueError("language_mode must be roman_urdu, mixed, english or auto")
+    if language_mode not in ("roman_urdu", "mixed", "english", "auto", "roman_urdu_via_urdu"):
+        raise ValueError("language_mode must be roman_urdu, mixed, english, auto or roman_urdu_via_urdu")
     eng = transcription.pick_engine()
     m = model or get_settings()["transcription"]["model"]
     if eng and not transcription.model_cached(eng, m) and not allow_model_download:
@@ -352,10 +360,16 @@ def transcribe_voiceover(project_id: str, language_mode: str = "roman_urdu", mod
 
 
 def _transcript_view(tr: dict, max_segments: int = 80) -> dict:
+    warn = list(tr.get("warnings") or [])
+    if transcription.looks_translated(tr):
+        warn.append("Many long segments contain no Urdu words - Whisper may have TRANSLATED Urdu speech into English. "
+                    "Ask the user; if the speaker spoke Urdu, re-run transcribe_voiceover with "
+                    "language_mode='roman_urdu_via_urdu' and then romanize_transcript.")
     return {
         "engine": tr.get("engine"), "language_mode": tr.get("language_mode"), "duration": tr.get("duration"),
         "word_count": len(tr.get("words", [])), "needs_review": tr.get("needs_review"),
-        "message": tr.get("message"), "warnings": tr.get("warnings"),
+        "message": tr.get("message"), "warnings": warn or None,
+        "needs_romanization": tr.get("needs_romanization", False),
         "segments": [{"id": s["id"], "t": f"{s['start']:.2f}-{s['end']:.2f}", "text": s["text"], "flags": s.get("flags", []),
                       "tone": s.get("tone")} for s in tr.get("segments", [])[:max_segments]],
         "uncertain_words": tr.get("uncertain_words", [])[:40], "key_terms": tr.get("key_terms", [])[:12],
@@ -380,6 +394,16 @@ def correct_transcript(project_id: str, segment_id: int = -1, new_text: str = ""
     p = projects.load_project(project_id)
     tr = transcription.correct_transcript(p, segment_id if segment_id >= 0 else None, new_text or None, replacements or None)
     return _ok(transcript=_transcript_view(tr))
+
+
+@tool
+def romanize_transcript(project_id: str, segments: list[dict]) -> dict:
+    """After transcribing with roman_urdu_via_urdu: send EVERY segment rewritten in Roman Urdu, e.g.
+    [{"id": 0, "text": "Ab apni skin concern ke liye ek experienced dermatologist se..."}]. Transliterate word for word,
+    keep English words as spoken, do not translate or shorten. Segment timing is preserved."""
+    p = projects.load_project(project_id)
+    tr = transcription.romanize_transcript(p, segments)
+    return _ok(still_in_urdu_script=tr.get("still_in_urdu_script"), transcript=_transcript_view(tr))
 
 
 @tool
@@ -475,7 +499,8 @@ def generate_captions(project_id: str, mode: str = "", position: str = "", upper
 @tool
 def add_graphics(project_id: str, graphics: list[dict]) -> dict:
     """Add motion graphics to the plan. Types: title_card, lower_third, info_card, stat_card, callout, cta,
-    notification, phone_mockup, process_steps, checklist, location_pin, kinetic_text, logo_bug, image_card, line_accent.
+    notification, phone_mockup, process_steps, checklist, location_pin, kinetic_text, logo_bug, image_card, line_accent,
+    plus the designed scene_* / overlay types (see set_storyboard). Items may use at_text instead of start.
     Example: {"type":"lower_third","start":2.0,"duration":4,"params":{"name":"Dr. Sara Ali","role":"Dermatologist"}}.
     params by type: title_card{title,subtitle,fullscreen}, info_card{title,text,icon}, stat_card{value,label},
     callout{text,x,y}, cta{headline,subtitle,button,contact[]}, notification{app,title,text}, phone_mockup{app_title,items[],button,image},
@@ -485,6 +510,100 @@ def add_graphics(project_id: str, graphics: list[dict]) -> dict:
     p = projects.load_project(project_id)
     tl = planner.apply_plan_changes(p, [{"op": "add_graphic", "graphic": g} for g in graphics])
     return _ok(graphics=[g.model_dump() for g in tl.graphics])
+
+
+STORYBOARD_DOC = """
+Text markup in titles: *word* = accent colour, \\n = new line. Themes: "navy" (dark) or "ice" (light).
+Item = {"type": ..., "at_text": "exact phrase from transcript", "end_text"?: "...", "duration"?: s, "until_end"?: bool,
+        "params": {...}, "position"?: ..., "sfx"?: "auto"|"none"|name}
+SCENES (full screen, replace the footage while shown):
+ scene_headline {kicker, title, big (huge accent word e.g. FREE), subtitle, tag, tag_style:"text"|"pill", decor:"cards", theme}
+ scene_phone   {kicker, title, ui:"booking"|"chat"|"video_call"|"list", header, subheader, badge, messages[], items[],
+                button, booked:bool, video:{asset_id, src_in} (video_call shows real footage inside the phone),
+                side_icons[], tags[], tag, theme}
+ scene_flow    {kicker, title, rows:[{from, to, style:"accent"|"dark", icon}], note, theme}
+ scene_steps   {items:[{title, icon}], title, tag, title_position:"bottom"|"top", theme}
+ scene_icons   {kicker, items:[{label, icon}], title, tags[]}  or  {focus:{label, sub, icon, satellites[]}, tags[]}
+ scene_cards   {title, cards:[{label, color "#hex", bars:[0-1, 0-1]}], note, theme}
+ scene_cta     {kicker, photo:{asset_id, time, focus_x, focus_y, zoom}, headline, credentials[], button, phone}
+ every scene: transition / transition_out = "slide_left"|"slide_up"|"dissolve"|"cut"
+OVERLAYS (on top of footage): label_pill {text, icon, position}, counter {from, to, prefix, suffix, label, position},
+ credential_card {title, sub, position}, headline_card {kicker, big, tag, position},
+ chat_bubbles {count, counter:{from, to, label}}
+ positions: top_left|top_center|top_right|upper_center|lower_left|lower_center|bottom_center
+Icons: check, medical, pin, phone, star, clock, shield, calendar, sparkle, chat, drop, user, video, home, briefcase,
+ graduation, monitor, pulse, search, document, warning.
+"""
+
+
+def set_storyboard(project_id: str, items: list[dict], replace: bool = True) -> dict:
+    p = projects.load_project(project_id)
+    tl, report = planner.set_storyboard(p, items, replace)
+    return _ok(**report, next="preview_graphic for 2-3 key scenes, then preview_video")
+
+
+set_storyboard.__doc__ = (
+    "Place designed full-screen scenes and animated overlays, each timed to a spoken phrase (at_text) - the studio "
+    "finds the exact time in the voiceover. replace=true replaces the previous storyboard. Returns resolved times, "
+    "scene coverage and warnings for phrases that were not found.\n" + STORYBOARD_DOC)
+set_storyboard = tool(set_storyboard)
+
+
+@tool
+def preview_graphic(project_id: str, graphic: dict = {}, graphic_id: str = ""):  # noqa: B006
+    """Render the final frame of one scene/overlay as an image so you can SEE the design before rendering video.
+    Pass an existing graphic_id from the plan, or a graphic dict ({type, params, start}) to try a design."""
+    from PIL import Image
+
+    from . import scenes as scenes_mod
+    from .models import Graphic
+    try:
+        p = projects.load_project(project_id)
+        data = p.read_json("editing_timeline.json")
+        if not data:
+            raise ValueError("Create an editing plan first.")
+        tl = Timeline(**data)
+        if graphic_id:
+            g = next((x for x in tl.graphics if x.id == graphic_id), None)
+            if g is None:
+                raise ValueError(f"graphic {graphic_id} not found")
+        else:
+            gd = {"id": "preview", "start": 0.0, "duration": 4.0, **graphic}
+            g = Graphic(**{k: v for k, v in gd.items() if k in Graphic.model_fields})
+        W, H = tl.output.width, tl.output.height
+        prof = profiles.load_profile(tl.profile)
+        base = None
+        if g.type not in scenes_mod.SCENE_TYPES:
+            seg = next((x for x in tl.segments if x.timeline_start <= g.start + 0.5 < x.timeline_start + x.duration), None)
+            if seg is not None and seg.asset_id != "__scene__":
+                from .ffmpeg_utils import read_frames_rgb
+                a = p.asset(seg.asset_id)
+                vs = a["info"]["video_streams"][0]
+                ar = W / H
+                fw, fh = (int(round(vs["height"] * ar)), vs["height"]) if vs["width"] / vs["height"] > ar else (vs["width"], int(round(vs["width"] / ar)))
+                fr = read_frames_rgb(p.asset_path(a), [seg.src_in + (g.start + 0.5 - seg.timeline_start)], vs["width"], vs["height"])
+                if fr:
+                    im = Image.fromarray(fr[0])
+                    x0 = int(min(max(0, seg.reframe.focus_x * vs["width"] - fw / 2), vs["width"] - fw))
+                    base = im.crop((x0, (vs["height"] - fh) // 2, x0 + fw, (vs["height"] - fh) // 2 + fh))
+        if g.type in scenes_mod.SCENE_TYPES or g.type in scenes_mod.LAYERED_OVERLAYS:
+            comp = scenes_mod.build(g, W, H, prof, p.path("graphics", "previews_stills"), p)
+            img = scenes_mod.still_frame(comp, W, H, base=base, project=p)
+        else:
+            from .graphics import render_graphic
+            pl = render_graphic(g, W, H, prof, p.path("graphics", "previews_stills"), p.root)
+            img = (base or Image.new("RGB", (W, H), (60, 70, 80))).convert("RGBA").resize((W, H))
+            if pl:
+                img.alpha_composite(Image.open(pl.path).convert("RGBA"), (max(0, pl.x), max(0, pl.y)))
+        img = img.convert("RGB")
+        img.thumbnail((540, 960))
+        out = p.path("graphics", "previews_stills", f"still_{g.id}.jpg")
+        img.save(out, quality=85)
+        b64 = base64.b64encode(out.read_bytes()).decode()
+        return [TextContent(type="text", text=json.dumps({"ok": True, "graphic": g.id, "type": g.type, "file": str(out)})),
+                ImageContent(type="image", data=b64, mimeType="image/jpeg")]
+    except Exception as e:  # noqa: BLE001
+        return [TextContent(type="text", text=json.dumps({"ok": False, "error": str(e)}))]
 
 
 @tool

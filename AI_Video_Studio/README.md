@@ -155,10 +155,40 @@ interruption, only re-encodes what changed.
   `+faststart`. Every render is validated: the file opens, has the right dimensions and an audio stream,
   matches the expected duration, and decodes fully without errors. Existing exports are never overwritten.
 
+## 4b. Motion-explainer style (designed scenes like premium clinic Reels)
+
+Profile **`motion_explainer`**: about half of the video is full-screen designed scenes that illustrate exactly what is
+being said. The other half is the speaker on camera with animated overlays. Ask Claude:
+
+> Edit this as a motion explainer Reel using the motion_explainer profile, like my reference ad.
+
+Claude plans the edit, then calls **`set_storyboard`**. Every scene or overlay is tied to a phrase from the voiceover
+(`at_text`), so the studio finds the exact time itself. Claude can check any design with **`preview_graphic`**.
+
+| Full-screen scenes | Overlays on the speaker |
+|---|---|
+| `scene_headline`: kinetic headline, huge accent word (FREE), floating cards hook | `label_pill`: top label (EXPERIENCED DERMATOLOGIST) |
+| `scene_phone`: phone with booking calendar, patient chat, or **video call with the real footage inside** | `counter`: count-up stat (12+ → 17+ YEARS) |
+| `scene_flow`: journey diagram (FIRST CONSULTATION → FREE) | `credential_card`: title + experience |
+| `scene_steps`: numbered steps appearing one by one | `headline_card`: FIRST CONSULTATION **FREE** |
+| `scene_icons`: lifestyle tiles or a big icon circle with tags | `chat_bubbles`: floating messages + "N replies today" counter |
+| `scene_cards`: skin-type cards | |
+| `scene_cta`: end card with the doctor's photo (from your footage), WhatsApp button, phone number | |
+
+- Each element animates in on its own (staggered rise, slide and fade).
+- Scenes slide in and out of the footage, and lip-sync is kept after every scene.
+- Overlays never appear on top of a scene.
+- Captions are small navy **pills** with keywords in turquoise.
+
+**Roman Urdu accuracy:** if the transcript shows English sentences where the speaker actually spoke Urdu, Whisper
+translated the speech. Re-run with `language_mode="roman_urdu_via_urdu"`: Whisper writes Urdu script, which it never
+translates, and Claude converts every line to Roman Urdu with `romanize_transcript`, keeping the timing. The studio
+warns automatically when a transcript looks translated.
+
 ## 5. Editing profiles
 
 The default is **PREMIUM COMMERCIAL EDITING PROFILE**. The others are `healthcare_dermatology`,
-`real_estate`, `product_ad`, `corporate`, `youtube`, `reels_shorts`, `educational` and `cinematic`.
+`real_estate`, `product_ad`, `corporate`, `youtube`, `reels_shorts`, `educational`, `cinematic` and `motion_explainer`.
 Change preferences permanently by asking Claude, for example: *"Update my profile: captions at the
 bottom, uppercase, music a bit quieter."* That calls `update_editing_profile`, and the overrides are
 saved in `Documents\AI_Video_Studio\profiles\`.

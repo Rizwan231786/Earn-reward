@@ -142,7 +142,7 @@ def _script_flags(text: str, mode: str) -> list[str]:
     flags = []
     if DEVANAGARI.search(text):
         flags.append("devanagari_detected")
-    if ARABIC.search(text) and mode in ("roman_urdu", "mixed", "english"):
+    if ARABIC.search(text) and mode in ("roman_urdu", "mixed", "english", "roman_urdu_via_urdu"):
         flags.append("arabic_script_detected")
     return flags
 
@@ -269,6 +269,9 @@ def transcribe(project: Project, language_mode: str = "roman_urdu", model: str |
         lang, prompt = "en", (ROMAN_URDU_PROMPT if language_mode == "roman_urdu" else MIXED_PROMPT)
     elif language_mode == "english":
         lang = "en"
+    elif language_mode == "roman_urdu_via_urdu":
+        # Urdu-script pass: Whisper never translates here; Claude then romanizes each segment verbatim.
+        lang = "ur"
 
     words: list[dict] = []
     if engine == "faster-whisper":
@@ -312,6 +315,10 @@ def transcribe(project: Project, language_mode: str = "roman_urdu", model: str |
     tr = {"engine": engine, "model": model, "language_mode": language_mode, "detected_language": detected,
           "duration": total, "words": words, "segments": [], "created_at": now_iso(),
           "speech_regions": speech_regions(wav, total)}
+    if language_mode == "roman_urdu_via_urdu":
+        tr["needs_romanization"] = True
+        tr["message"] = ("Transcribed in Urdu script (no translation). Next: call romanize_transcript with every segment "
+                         "written in Roman Urdu (English words stay English), keeping the meaning word for word.")
     if language_mode in ("roman_urdu", "mixed") and detected not in (None, "en", "ur", "hi"):
         tr.setdefault("warnings", []).append(f"Recogniser detected language '{detected}'. Please review the text.")
     return _finalise(project, tr)
@@ -440,3 +447,52 @@ def align_script(project: Project, script: str, language_mode: str | None = None
     if language_mode:
         tr["language_mode"] = language_mode
     return _finalise(project, tr)
+
+
+def looks_translated(tr: dict) -> bool:
+    """Heuristic: a roman_urdu transcript whose long stretches contain almost no Urdu function words was
+    probably translated to English by the recogniser."""
+    if tr.get("language_mode") not in ("roman_urdu", "mixed"):
+        return False
+    urdu = {"hai", "hain", "ka", "ki", "ke", "ko", "se", "mein", "main", "aap", "aur", "nahi", "bhi", "hum", "kya",
+            "yeh", "woh", "ye", "wo", "tha", "thi", "karein", "kar", "hoon", "ho", "apni", "apne", "liye", "sath", "saath"}
+    segs = tr.get("segments") or []
+    long_en = [s for s in segs if len(s["text"].split()) >= 8 and
+               not ({w.lower().strip(".,!?") for w in s["text"].split()} & urdu)]
+    return len(segs) > 4 and len(long_en) >= max(3, len(segs) // 3)
+
+
+def romanize_transcript(project: Project, segments: list[dict]) -> dict:
+    """Replace Urdu-script segment texts with Claude's Roman Urdu version, keeping segment timing.
+
+    Word timings are kept when the word count matches and otherwise spread within the segment."""
+    tr = project.read_json("audio/transcript.json")
+    if not tr:
+        raise ValueError("No transcript yet.")
+    new_text = {int(s["id"]): str(s["text"]).strip() for s in segments if str(s.get("text", "")).strip()}
+    bad = [i for i, t in new_text.items() if DEVANAGARI.search(t) or ARABIC.search(t)]
+    if bad:
+        raise ValueError(f"Segments {bad} still contain Urdu/Devanagari script - send Roman Urdu (Latin letters) only.")
+    words = tr["words"]
+    out: list[dict] = []
+    for seg in tr["segments"]:
+        a, b = seg["word_range"]
+        old = words[a:b + 1] if b >= a else []
+        if seg["id"] in new_text:
+            toks = new_text[seg["id"]].split()
+            if len(toks) == len(old):
+                out += [{"word": t, "start": o["start"], "end": o["end"], "prob": None, "edited": True} for t, o in zip(toks, old)]
+            else:
+                out += _retime(toks, seg["start"], seg["end"])
+        else:
+            out += old
+    missing = [s["id"] for s in tr["segments"] if s["id"] not in new_text and
+               any(ARABIC.search(w["word"]) for w in words[s["word_range"][0]:s["word_range"][1] + 1])]
+    tr["words"] = out
+    tr["segments"] = []
+    tr["language_mode"] = "roman_urdu"
+    tr["romanized"] = True
+    tr["needs_romanization"] = bool(missing)
+    res = _finalise(project, tr)
+    res["still_in_urdu_script"] = missing
+    return res

@@ -93,6 +93,13 @@ def auto_font_size(w: int, h: int) -> int:
     return int(round(w * 0.062))
 
 
+def caption_font_size(cs: CaptionSettings, w: int, h: int) -> int:
+    """font_size is specified for a 1080-px short side, so previews at lower resolution scale correctly."""
+    if cs.font_size:
+        return max(8, int(round(cs.font_size * min(w, h) / 1080)))
+    return auto_font_size(w, h)
+
+
 def _layout(cs: CaptionSettings, w: int, h: int) -> tuple[int, int]:
     """Return (ASS alignment, MarginV) respecting mobile safe zones."""
     vertical = h > w
@@ -102,6 +109,8 @@ def _layout(cs: CaptionSettings, w: int, h: int) -> tuple[int, int]:
         return 8, int(h * (0.12 if vertical else 0.07))
     if cs.position == "bottom":
         return 2, int(h * (0.16 if vertical else 0.07))
+    if cs.position == "lower_middle":
+        return 2, int(h * (0.20 if vertical else 0.12))
     return 2, int(h * (0.27 if vertical else 0.14))  # lower_third (above Reels/Shorts UI)
 
 
@@ -112,7 +121,7 @@ def build_captions(words: list[dict], cs: CaptionSettings, width: int, height: i
     words, dropped = clean_words(words)
     mapped = [w | {"start": time_map(w["start"]), "end": time_map(w["end"])} for w in words]
     groups = group_words(mapped, cs.max_words_per_line * cs.max_lines)
-    font_size = cs.font_size or auto_font_size(width, height)
+    font_size = caption_font_size(cs, width, height)
     align, margin_v = _layout(cs, width, height)
     font = ass_font_name(cs.font, cs.weight)
     bold = -1 if cs.weight == "Bold" else 0
@@ -163,6 +172,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         lines = _split_lines(texts, cs.max_words_per_line, cs.max_lines)
         srt.append(f"{len(srt) + 1}\n{_ts_srt(start)} --> {_ts_srt(end)}\n" +
                    "\n".join(" ".join(g[i]["word"] for i in ln) for ln in lines) + "\n")
+
+        if cs.background == "pill":
+            events.extend(_pill_events(g, texts, lines, start, end, cs, width, height, font_size, is_key))
+            continue
 
         intro = ""
         if cs.animation == "pop":
@@ -240,4 +253,69 @@ def kinetic_events(g: Graphic, width: int, height: int) -> list[str]:
         end = g.start + (i + 1) * stagger if i + 1 < len(words) else g.start + g.duration
         fade = r"{\fad(0,250)}" if i + 1 == len(words) else ""
         out.append(f"Dialogue: 2,{_ts_ass(st)},{_ts_ass(end)},Kinetic,,0,0,0,,{{\\an5\\pos({x},{y})}}{fade}" + " ".join(parts))
+    return out
+
+
+def pill_center_y(cs: CaptionSettings, height: int, width: int) -> int:
+    vertical = height > width
+    return int(height * {"top": 0.12, "center": 0.5, "lower_middle": 0.77 if vertical else 0.8,
+                         "lower_third": 0.72 if vertical else 0.8, "bottom": 0.83 if vertical else 0.9}.get(cs.position, 0.77))
+
+
+def _pill_events(g: list[dict], texts: list[str], lines: list[list[int]], start: float, end: float, cs: CaptionSettings,
+                 width: int, height: int, fs: int, is_key) -> list[str]:
+    """Rounded navy box per caption line (ASS vector drawing) + text on top, keywords in the accent colour."""
+    from PIL import ImageFont
+
+    from .fonts import font_file
+    pf = ImageFont.truetype(font_file(cs.font, cs.weight), fs)
+    asc, desc = pf.getmetrics()
+    k = fs / float(asc + desc)  # libass scales fonts so ascent+descent == Fontsize
+    hl, prim = ass_color(cs.highlight_color), ass_color(cs.primary_color)
+    box_col = ass_color(cs.background_color)
+    box_alpha = f"&H{int(round((1 - cs.background_opacity) * 255)):02X}&"
+    padx, pady = fs * 0.55, fs * 0.26
+    line_h = fs * 1.0 + 2 * pady
+    gap = fs * 0.22
+    cy0 = pill_center_y(cs, height, width) - (len(lines) - 1) * (line_h + gap) / 2
+    fade = r"\fad(110,90)"
+    pop = r"\fscx92\fscy92\t(0,120,\fscx100\fscy100)" if cs.animation == "pop" else ""
+    out = []
+    for li, ln in enumerate(lines):
+        raw = " ".join(g[i]["word"].upper() if cs.uppercase else g[i]["word"] for i in ln)
+        tw = pf.getlength(raw) * k
+        w, h = tw + 2 * padx, line_h
+        cx, cy = width / 2, cy0 + li * (line_h + gap)
+        x0, y0 = cx - w / 2, cy - h / 2
+        r = min(h / 2, fs * 0.42)
+        path = (f"m {r:.1f} 0 l {w - r:.1f} 0 b {w:.1f} 0 {w:.1f} 0 {w:.1f} {r:.1f} l {w:.1f} {h - r:.1f} "
+                f"b {w:.1f} {h:.1f} {w:.1f} {h:.1f} {w - r:.1f} {h:.1f} l {r:.1f} {h:.1f} b 0 {h:.1f} 0 {h:.1f} 0 {h - r:.1f} "
+                f"l 0 {r:.1f} b 0 0 0 0 {r:.1f} 0")
+        out.append(f"Dialogue: 0,{_ts_ass(start)},{_ts_ass(end)},Caption,,0,0,0,,"
+                   f"{{\\an7\\pos({x0:.1f},{y0:.1f})\\bord0\\shad0\\blur0.6\\1c{box_col}&\\1a{box_alpha}{fade}\\p1}}{path}")
+
+        def line_text(active: int | None) -> str:
+            parts = []
+            for i in ln:
+                t = texts[i]
+                if active == i or (active is None and is_key(g[i]["word"])) or (active is not None and is_key(g[i]["word"])):
+                    parts.append("{\\c" + hl + "&}" + t + "{\\c" + prim + "&}")
+                else:
+                    parts.append(t)
+            return " ".join(parts)
+        head = f"{{\\an5\\pos({cx:.1f},{cy + fs * 0.04:.1f})\\bord0\\shad0{fade}{pop}}}"
+        if cs.mode in ("word_highlight", "word_by_word", "karaoke"):
+            for j, i in enumerate(ln):
+                ws = start if (li == 0 and j == 0) else g[i]["start"]
+                nxt = ln[j + 1] if j + 1 < len(ln) else None
+                we = g[nxt]["start"] if nxt is not None else end
+                if we - ws < 0.02:
+                    continue
+                hd = head if (li == 0 and j == 0) else f"{{\\an5\\pos({cx:.1f},{cy + fs * 0.04:.1f})\\bord0\\shad0}}"
+                out.append(f"Dialogue: 1,{_ts_ass(ws)},{_ts_ass(we)},Caption,,0,0,0,,{hd}{line_text(i)}")
+            first = g[ln[0]]["start"]
+            if first - start > 0.02 and li > 0:
+                out.append(f"Dialogue: 1,{_ts_ass(start)},{_ts_ass(first)},Caption,,0,0,0,,{head}{line_text(None)}")
+        else:
+            out.append(f"Dialogue: 1,{_ts_ass(start)},{_ts_ass(end)},Caption,,0,0,0,,{head}{line_text(None)}")
     return out
