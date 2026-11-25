@@ -1,0 +1,141 @@
+<Window x:Class="MyDownloadManager.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings" Width="680" Height="600" MinWidth="560" MinHeight="460"
+        Style="{StaticResource AppWindow}" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Icon="pack://application:,,,/Assets/MyDownloadManager.ico">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Bottom">
+            <TextBlock Text="{Binding Error}" Foreground="{StaticResource ErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0"
+                       Visibility="{Binding Error, Converter={StaticResource NullToVis}}" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <Button Style="{StaticResource SecondaryButton}" Content="Cancel" Command="{Binding CancelCommand}" IsCancel="True" Margin="0,0,8,0" />
+                <Button Style="{StaticResource PrimaryButton}" Content="Save" Command="{Binding SaveCommand}" IsDefault="True" />
+            </StackPanel>
+        </StackPanel>
+
+        <TabControl>
+            <TabItem Header="General">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="Default download folder" Style="{StaticResource FieldLabel}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="…" Width="34" Margin="4,0,0,0" Style="{StaticResource SecondaryButton}" MinWidth="0" Click="Browse_Click" />
+                            <TextBox Text="{Binding DownloadFolder, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+                        <CheckBox Content="Sort downloads into category sub-folders (Video, Music, Documents, …)" IsChecked="{Binding UseCategoryFolders}" />
+                        <CheckBox Content="Keep running in the notification area when the window is closed" IsChecked="{Binding MinimizeToTray}" />
+                        <CheckBox Content="Start MyDownloadManager when I sign in to Windows" IsChecked="{Binding StartWithWindows}" />
+                        <CheckBox Content="Show notifications (download added, completed, problems)" IsChecked="{Binding ShowNotifications}" />
+                        <CheckBox Content="Watch the clipboard for download links" IsChecked="{Binding MonitorClipboard}" Margin="0,12,0,0" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="22,0,0,0"
+                                   Text="Off by default. When enabled, copying a link to a file (e.g. .zip, .mp4) shows a notification; nothing downloads until you confirm. Clipboard content is never stored or sent anywhere." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Connection">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Connections per download (1–32)" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding MaxConnections}" />
+                                <TextBlock Text="Simultaneous downloads (1–20)" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding MaxConcurrent}" />
+                                <TextBlock Text="Retries per connection" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding MaxRetries}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Global speed limit (e.g. 2M; empty = unlimited)" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding SpeedLimit, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Text="Connect timeout (seconds)" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding ConnectTimeout}" />
+                                <TextBlock Text="No-data timeout (seconds)" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding ReadTimeout}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="User-Agent" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding UserAgent}" />
+
+                        <TextBlock Text="Proxy" Style="{StaticResource SectionHeader}" Margin="0,16,0,0" />
+                        <ComboBox ItemsSource="{Binding ProxyModes}" SelectedItem="{Binding ProxyMode}" Width="200" HorizontalAlignment="Left" />
+                        <TextBlock Style="{StaticResource Hint}" Text="System = use Windows proxy settings. Manual = the address below (http://host:port)." Margin="0,4,0,0" />
+                        <TextBlock Text="Proxy address" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding ProxyAddress}" />
+                        <Grid Margin="0,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Proxy user name" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding ProxyUserName}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Proxy password (stored encrypted)" Style="{StaticResource FieldLabel}" />
+                                <PasswordBox x:Name="ProxyPasswordBox" PasswordChanged="ProxyPasswordBox_PasswordChanged" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Scheduler">
+                <StackPanel Margin="14">
+                    <CheckBox Content="Run the scheduled queue every day in this time window" IsChecked="{Binding UseSchedule}" />
+                    <StackPanel Orientation="Horizontal" Margin="22,8,0,0" IsEnabled="{Binding UseSchedule}">
+                        <TextBlock Text="Start at" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox Text="{Binding ScheduleStart}" Width="70" />
+                        <TextBlock Text="Stop at" VerticalAlignment="Center" Margin="16,0,8,0" />
+                        <TextBox Text="{Binding ScheduleStop}" Width="70" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="22,8,0,0"
+                               Text="Downloads added with “Start: Scheduled” wait for this window. At the stop time they are paused and continue in the next window. Overnight windows (e.g. 23:00–06:00) are supported." />
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Browser">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="14">
+                        <CheckBox Content="Accept downloads from the browser extension" IsChecked="{Binding BrowserIntegration}" />
+                        <TextBlock Text="File types the extension takes over by default (space separated)" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding InterceptExtensions}" />
+                        <TextBlock Text="Minimum size to take over (MB)" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding InterceptMinMb}" Width="100" HorizontalAlignment="Left" />
+                        <TextBlock Text="Registration" Style="{StaticResource SectionHeader}" Margin="0,16,0,0" />
+                        <TextBlock Text="{Binding BrowserStatus}" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Style="{StaticResource SecondaryButton}" Content="Repair registration" Command="{Binding RepairBrowserIntegrationCommand}" Margin="0,0,8,0" />
+                            <Button Style="{StaticResource SecondaryButton}" Content="Open extension folder" Command="{Binding OpenExtensionFolderCommand}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,10,0,0" TextWrapping="Wrap">
+                            Chrome / Edge: open chrome://extensions (edge://extensions), enable Developer mode, click “Load unpacked” and choose the
+                            “chromium” folder. Firefox: install the signed .xpi, or load “firefox/manifest.json” via about:debugging (temporary).
+                            See the README for details.
+                        </TextBlock>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Media / FFmpeg">
+                <StackPanel Margin="14">
+                    <TextBlock Text="FFmpeg executable (empty = bundled copy, then PATH)" Style="{StaticResource FieldLabel}" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Detect" Style="{StaticResource SecondaryButton}" Margin="4,0,0,0" Command="{Binding DetectFfmpegCommand}" />
+                        <TextBox Text="{Binding FfmpegPath, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding FfmpegStatus}" Style="{StaticResource Hint}" Margin="0,6,0,0" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,14,0,0"
+                               Text="FFmpeg is only used to copy (remux) audio and video streams into MP4/MKV — nothing is re-encoded. MyDownloadManager never downloads DRM-protected (Widevine, PlayReady, FairPlay) or live streams." />
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

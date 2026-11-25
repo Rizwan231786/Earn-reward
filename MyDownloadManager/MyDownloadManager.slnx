@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MyDownloadManager.App/MyDownloadManager.App.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/MyDownloadManager.Application/MyDownloadManager.Application.csproj" />
+    <Project Path="src/MyDownloadManager.Core/MyDownloadManager.Core.csproj" />
+    <Project Path="src/MyDownloadManager.Engine/MyDownloadManager.Engine.csproj" />
+    <Project Path="src/MyDownloadManager.Integration/MyDownloadManager.Integration.csproj" />
+    <Project Path="src/MyDownloadManager.Media/MyDownloadManager.Media.csproj" />
+    <Project Path="src/MyDownloadManager.NativeHost/MyDownloadManager.NativeHost.csproj" />
+    <Project Path="src/MyDownloadManager.Persistence/MyDownloadManager.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MyDownloadManager.Tests/MyDownloadManager.Tests.csproj" />
+  </Folder>
+</Solution>

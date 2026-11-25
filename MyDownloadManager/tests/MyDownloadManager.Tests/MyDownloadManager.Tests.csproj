@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);xUnit1031;CA2007</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyDownloadManager.Core\MyDownloadManager.Core.csproj" />
+    <ProjectReference Include="..\..\src\MyDownloadManager.Engine\MyDownloadManager.Engine.csproj" />
+    <ProjectReference Include="..\..\src\MyDownloadManager.Persistence\MyDownloadManager.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\MyDownloadManager.Media\MyDownloadManager.Media.csproj" />
+    <ProjectReference Include="..\..\src\MyDownloadManager.Integration\MyDownloadManager.Integration.csproj" />
+    <ProjectReference Include="..\..\src\MyDownloadManager.Application\MyDownloadManager.Application.csproj" />
+    <!-- Built so the end-to-end tests can spawn it like a browser would. -->
+    <ProjectReference Include="..\..\src\MyDownloadManager.NativeHost\MyDownloadManager.NativeHost.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MyDownloadManager — Settings</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="options">
+  <h1>MyDownloadManager browser integration</h1>
+  <section>
+    <label class="row"><input type="checkbox" id="interceptDownloads"> Take over browser downloads</label>
+    <label class="field">File types to take over (space separated, empty = all)
+      <input type="text" id="extensions"></label>
+    <label class="field">Only take over files larger than (MB)
+      <input type="number" id="minSizeMb" min="0" step="0.5"></label>
+    <label class="field">Never take over downloads from these sites (space separated)
+      <input type="text" id="excludedHosts" placeholder="example.com intranet.local"></label>
+    <label class="row"><input type="checkbox" id="showVideoOverlay"> Show the “Download This Video” button on videos</label>
+    <button id="save">Save</button> <span id="saved" class="muted"></span>
+  </section>
+
+  <section id="troubleshooting">
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li><b>“Native host unavailable”</b>: MyDownloadManager is not installed, or the browser integration was not registered.
+        Open MyDownloadManager → Settings → Browser integration → <i>Repair</i>, then restart the browser.</li>
+      <li><b>Installed the extension from a store or a different folder?</b> Its ID must be listed in the native host manifest.
+        Expected IDs: Chrome/Edge <code>jepeaacjobbkicoofllleimejjcjebge</code>, Firefox <code>mydownloadmanager@mydownloadmanager.app</code>.</li>
+      <li><b>Firefox</b>: grant “Access your data for all websites” in about:addons → MyDownloadManager → Permissions,
+        otherwise videos cannot be detected and cookies cannot be forwarded.</li>
+      <li><b>No “Download This Video” button</b>: start playback first. Streams protected with DRM (Widevine, PlayReady,
+        FairPlay) are shown as “Protected” and cannot be downloaded — this is intentional.</li>
+      <li><b>Download fails with 403</b>: the site requires a signed-in session that is not available outside the browser,
+        or the link expired. Start the download again from the page.</li>
+    </ul>
+  </section>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

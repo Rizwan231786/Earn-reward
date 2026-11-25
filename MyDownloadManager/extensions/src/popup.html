@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MyDownloadManager</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="popup">
+  <header>
+    <img src="icons/icon32.png" alt="" width="20" height="20">
+    <h1>MyDownloadManager</h1>
+    <span id="status" class="pill">checking…</span>
+  </header>
+  <label class="row"><input type="checkbox" id="intercept"> Take over browser downloads</label>
+  <label class="row"><input type="checkbox" id="overlay"> Show “Download This Video” button</label>
+  <h2>Media on this page</h2>
+  <div id="media" class="list"><p class="muted">Nothing detected yet. Start playing the video, then reopen this popup.</p></div>
+  <p class="muted small">DRM-protected streams (Widevine, PlayReady, FairPlay) cannot be downloaded.</p>
+  <footer><a href="#" id="options">Settings</a> · <a href="#" id="help">Troubleshooting</a></footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

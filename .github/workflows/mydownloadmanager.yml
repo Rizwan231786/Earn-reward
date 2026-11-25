@@ -1,0 +1,175 @@
+name: MyDownloadManager
+
+on:
+  push:
+    paths:
+      - "MyDownloadManager/**"
+      - ".github/workflows/mydownloadmanager.yml"
+  pull_request:
+    paths:
+      - "MyDownloadManager/**"
+      - ".github/workflows/mydownloadmanager.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mdm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows x64 — tests, smoke test, installer
+    runs-on: windows-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: MyDownloadManager
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install FFmpeg for tests (generates H.264/VP9 test media; not shipped)
+        run: |
+          choco install ffmpeg -y --no-progress
+          ffmpeg -version | Select-Object -First 1
+
+      - name: Build solution
+        run: dotnet build MyDownloadManager.slnx -c Release
+
+      - name: C# unit + integration tests (incl. 4 GB download)
+        run: |
+          dotnet test tests\MyDownloadManager.Tests -c Release --no-build `
+            --logger "trx;LogFileName=windows.trx" --logger "console;verbosity=normal" `
+            --results-directory artifacts\test-results
+
+      - name: Browser extension tests and packages
+        working-directory: MyDownloadManager/extensions
+        run: |
+          npm test
+          node build.mjs
+
+      - name: Publish app + native host (self-contained win-x64)
+        run: |
+          dotnet publish src\MyDownloadManager.App -c Release -r win-x64 --self-contained true -o artifacts\publish\app -p:DebugType=None
+          dotnet publish src\MyDownloadManager.NativeHost -c Release -r win-x64 --self-contained true -o artifacts\publish\app -p:DebugType=None
+
+      - name: Fetch LGPL FFmpeg for bundling (checksum verified)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pwsh build\fetch-ffmpeg.ps1 -Destination artifacts\ffmpeg
+
+      - name: Smoke test — launch the real WPF app and download a file
+        run: |
+          New-Item -ItemType Directory -Force artifacts\smoke, $env:RUNNER_TEMP\srv | Out-Null
+          $bytes = New-Object byte[] (48MB); (New-Object Random 42).NextBytes($bytes)
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\srv\smoke.bin", $bytes)
+          $server = Start-Process python -ArgumentList "tools\range_server.py", "$env:RUNNER_TEMP\srv", "8765" -PassThru -WindowStyle Hidden
+          Start-Sleep 2
+          $env:MDM_DATA_DIR = "$env:RUNNER_TEMP\mdm-data"
+          $env:MDM_SKIP_REGISTRATION = "1"
+          $env:MDM_SMOKE_URL = "http://127.0.0.1:8765/smoke.bin"
+          $out = (Resolve-Path artifacts\smoke).Path + "\result.txt"
+          $p = Start-Process artifacts\publish\app\MyDownloadManager.exe -ArgumentList "--smoke-test", $out -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "app did not exit in time" }
+          Stop-Process $server -Force
+          Get-Content $out
+          if ($p.ExitCode -ne 0 -or -not ((Get-Content $out -First 1) -eq "OK")) { throw "smoke test failed (exit $($p.ExitCode))" }
+          $src = (Get-FileHash "$env:RUNNER_TEMP\srv\smoke.bin").Hash
+          $dst = (Get-FileHash "$env:TEMP\mdm-smoke-downloads\smoke.bin").Hash
+          if ($src -ne $dst) { throw "hash mismatch $src vs $dst" }
+          Write-Host "Downloaded file SHA-256 matches source: $src"
+          $zone = Get-Content "$env:TEMP\mdm-smoke-downloads\smoke.bin" -Stream Zone.Identifier
+          if (-not ($zone -match "ZoneId=3")) { throw "Mark-of-the-Web missing" }
+          Write-Host "Mark-of-the-Web present"
+
+      - name: Compile installer (Inno Setup)
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc installer\MyDownloadManager.iss
+          if ($LASTEXITCODE) { throw "ISCC failed" }
+          Get-Item artifacts\installer\MyDownloadManager_Setup.exe | Format-List Name, Length
+
+      - name: Installer test — silent install, browser registration, native host, uninstall
+        run: |
+          $dir = "$env:RUNNER_TEMP\mdm-install"
+          $p = Start-Process artifacts\installer\MyDownloadManager_Setup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$dir`"", "/LOG=`"$env:RUNNER_TEMP\setup.log`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log" -Tail 50; throw "setup failed: $($p.ExitCode)" }
+          foreach ($f in "MyDownloadManager.exe", "MyDownloadManager.NativeHost.exe", "ffmpeg\ffmpeg.exe", "extensions\chromium\manifest.json", "extensions\firefox\manifest.json") {
+            if (-not (Test-Path "$dir\$f")) { throw "missing $f" }
+          }
+          foreach ($key in "HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.mydownloadmanager.host", "HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.mydownloadmanager.host", "HKCU:\Software\Mozilla\NativeMessagingHosts\com.mydownloadmanager.host") {
+            $manifest = (Get-ItemProperty $key).'(default)'
+            $json = Get-Content $manifest -Raw | ConvertFrom-Json
+            if ($json.path -ne "$dir\MyDownloadManager.NativeHost.exe") { throw "bad host path in $manifest" }
+            Write-Host "$key -> $manifest"
+          }
+          python tools\native_host_ping.py "$dir\MyDownloadManager.NativeHost.exe"
+          if ($LASTEXITCODE) { throw "native host ping failed" }
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
+          Start-Sleep 3
+          if (Test-Path "HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.mydownloadmanager.host") { throw "registration not removed on uninstall" }
+          if (Test-Path "$dir\MyDownloadManager.exe") { throw "files not removed on uninstall" }
+          Write-Host "Install / register / ping / uninstall OK"
+
+      - name: Test report
+        if: always()
+        run: python tools\test_report.py artifacts\test-results\windows.trx artifacts\test-results\TEST_REPORT_windows.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MyDownloadManager_Setup
+          path: MyDownloadManager/artifacts/installer/MyDownloadManager_Setup.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-extensions
+          path: MyDownloadManager/extensions/dist/*.zip
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-windows
+          path: |
+            MyDownloadManager/artifacts/test-results
+            MyDownloadManager/artifacts/smoke
+
+  linux:
+    name: Linux — build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: MyDownloadManager
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: dotnet build MyDownloadManager.slnx -c Release
+      - run: dotnet test tests/MyDownloadManager.Tests -c Release --no-build --logger "trx;LogFileName=linux.trx" --results-directory artifacts/test-results
+        env:
+          MDM_SKIP_LARGE: "1"
+      - run: cd extensions && npm test
+      - if: always()
+        run: python3 tools/test_report.py artifacts/test-results/linux.trx artifacts/test-results/TEST_REPORT_linux.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-linux
+          path: MyDownloadManager/artifacts/test-results

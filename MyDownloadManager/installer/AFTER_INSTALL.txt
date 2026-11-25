@@ -1,0 +1,22 @@
+MyDownloadManager is installed.
+
+Browser integration
+-------------------
+The native messaging host has been registered for Chrome, Edge, Chromium, Brave and Firefox.
+To finish, add the browser extension (this needs one manual step because browsers do not allow
+programs to install extensions silently):
+
+  Chrome / Edge / Brave:
+    1. Open chrome://extensions (edge://extensions)
+    2. Turn on "Developer mode"
+    3. Click "Load unpacked" and choose:
+       <install folder>\extensions\chromium
+
+  Firefox:
+    Install the signed add-on if one is published for your copy, or for testing open
+    about:debugging#/runtime/this-firefox -> "Load Temporary Add-on..." and choose
+       <install folder>\extensions\firefox\manifest.json
+    Then grant "Access your data for all websites" in about:addons.
+
+Start Menu -> MyDownloadManager -> "Browser extensions folder" opens that folder.
+See docs\BROWSER_EXTENSIONS.md and docs\TROUBLESHOOTING.md for details.

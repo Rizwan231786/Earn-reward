@@ -1,0 +1,26 @@
+:root { color-scheme: light dark; --accent: #1f6feb; --fg: #1f2328; --muted: #656d76; --bg: #fff; --line: #d0d7de; }
+@media (prefers-color-scheme: dark) { :root { --fg: #e6edf3; --muted: #8d96a0; --bg: #161b22; --line: #30363d; } }
+body { font: 13px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--fg); background: var(--bg); margin: 0; }
+body.popup { width: 380px; padding: 12px 14px; }
+body.options { max-width: 720px; padding: 24px; }
+header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+h1 { font-size: 15px; margin: 0; flex: 1; }
+body.options h1 { font-size: 20px; margin-bottom: 16px; }
+h2 { font-size: 13px; margin: 14px 0 6px; }
+.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.field { display: block; margin: 10px 0; }
+.field input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
+.pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--line); }
+.pill.ok { background: #1a7f37; color: #fff; } .pill.warn { background: #9a6700; color: #fff; } .pill.err { background: #cf222e; color: #fff; }
+.list { border: 1px solid var(--line); border-radius: 8px; max-height: 260px; overflow: auto; }
+.list p { margin: 10px; }
+.item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.item:last-child { border-bottom: 0; }
+.item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 5px 12px; cursor: pointer; font: inherit; }
+button:disabled { opacity: .6; cursor: default; }
+.muted { color: var(--muted); } .small { font-size: 11px; }
+footer { margin-top: 10px; font-size: 12px; }
+a { color: var(--accent); }
+code { font-size: 12px; }
+section { margin-bottom: 28px; }
