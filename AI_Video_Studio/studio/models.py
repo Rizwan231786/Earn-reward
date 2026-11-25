@@ -78,6 +78,7 @@ class VideoSegment(BaseModel):
     transition_in: Transition = Field(default_factory=Transition)
     keep_source_audio: bool = False
     is_broll: bool = False
+    scene_id: Optional[str] = None  # set for full-screen designed scenes (asset_id "__scene__")
 
     @property
     def duration(self) -> float:
@@ -88,12 +89,16 @@ class Graphic(BaseModel):
     id: str
     type: Literal["title_card", "lower_third", "info_card", "callout", "cta", "notification",
                   "phone_mockup", "process_steps", "stat_card", "location_pin", "kinetic_text",
-                  "logo_bug", "checklist", "image_card", "line_accent"]
+                  "logo_bug", "checklist", "image_card", "line_accent",
+                  # full-screen designed scenes (replace footage for their duration)
+                  "scene_headline", "scene_phone", "scene_flow", "scene_steps", "scene_icons", "scene_cards", "scene_cta",
+                  # layered overlays for talking-head footage
+                  "label_pill", "counter", "credential_card", "headline_card", "chat_bubbles"]
     start: float
     duration: float
     params: dict[str, Any] = Field(default_factory=dict)
     position: str = "auto"
-    animation: Literal["slide", "fade", "pop", "rise"] = "slide"
+    animation: Literal["slide", "fade", "pop", "rise", "drop"] = "slide"
     sfx: Optional[str] = None  # sfx name to place at entrance
 
 
@@ -122,13 +127,13 @@ class CaptionSettings(BaseModel):
     font: str = "Montserrat"
     weight: Literal["SemiBold", "Bold", "ExtraBold"] = "ExtraBold"
     font_size: Optional[int] = None  # px at output resolution; None => auto
-    position: Literal["bottom", "lower_third", "center", "top"] = "lower_third"
+    position: Literal["bottom", "lower_third", "lower_middle", "center", "top"] = "lower_third"
     primary_color: str = "#FFFFFF"
     highlight_color: str = "#2EE6D6"
     outline_color: str = "#0B1E3A"
     outline: float = 0.0
     shadow: float = 2.0
-    background: Literal["none", "box", "soft_box"] = "none"
+    background: Literal["none", "box", "soft_box", "pill"] = "none"
     background_color: str = "#0B1E3A"
     background_opacity: float = 0.55
     max_words_per_line: int = 5
@@ -179,7 +184,7 @@ class Timeline(BaseModel):
         problems = []
         t = 0.0
         for s in sorted(self.segments, key=lambda x: x.timeline_start):
-            if s.asset_id not in asset_ids:
+            if s.asset_id not in asset_ids and s.asset_id != "__scene__":
                 problems.append(f"segment {s.id}: unknown asset '{s.asset_id}'")
             if s.src_out <= s.src_in:
                 problems.append(f"segment {s.id}: src_out must be greater than src_in")

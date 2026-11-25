@@ -132,6 +132,44 @@ BUILTIN: dict[str, dict] = {
         color={"look": "cinematic_teal", "look_intensity": 0.55, "contrast": 1.1},
         graphics={"info_cards": False, "max_graphics_per_minute": 2},
         captions={"mode": "phrase", "font": "Manrope", "weight": "SemiBold", "position": "bottom"}),
+    "motion_explainer": _variant(
+        "motion_explainer", "MOTION EXPLAINER (MEDICAL / CLINIC REELS)",
+        "Designed explainer Reels: about half the video is full-screen motion-graphics scenes that illustrate exactly "
+        "what is being said, alternating with the talking head. Pill captions, count-up stats, phone UI and a "
+        "doctor-photo CTA end card. Navy and ice-blue scenes, turquoise accents.",
+        default_aspect="9:16",
+        pacing={"min_shot": 1.5, "target_shot": 5.0, "max_shot": 10.0, "lead_in": 0.0, "tail": 0.6},
+        transitions={"default": "cut", "section_change": "cut", "duration": 0.3, "max_non_cut_ratio": 0.0},
+        reframe={"mode": "auto", "motion": "none"},
+        color={"look_intensity": 0.22, "max_saturation": 1.05, "contrast": 1.04, "target_brightness": 0.52},
+        captions={"mode": "phrase", "font": "Montserrat", "weight": "Bold", "position": "lower_middle",
+                  "background": "pill", "background_color": "#0B1E3A", "background_opacity": 0.82, "font_size": 52,
+                  "max_words_per_line": 4, "max_lines": 1, "uppercase": False, "animation": "fade",
+                  "highlight_color": "#2EE6D6"},
+        graphics={"title_card": False, "lower_third": False, "info_cards": False, "cta_end_card": False,
+                  "storyboard": True},
+        audio={"tighten_pauses": True, "max_pause": 0.45, "music_volume_db": -22.0, "sfx_density": "subtle"},
+        storyboard_guide=[
+            "Goal: about 45-55% of the runtime is full-screen scenes (scene_*), the rest is the speaker on camera.",
+            "Hook (first 4-7 s): a scene_headline with decor 'cards' stating the problem in 2-3 words per line, "
+            "accent word marked *like this*, before the speaker appears.",
+            "First speaker shot: label_pill (e.g. EXPERIENCED DERMATOLOGIST) top_left. When experience is mentioned: "
+            "counter (from a few below to the real number, suffix +, label YEARS) top_right plus credential_card.",
+            "Alternate every 1-3 sentences: speaker 5-10 s, then a scene 3-8 s that illustrates exactly that sentence.",
+            "Pick scenes by meaning: offer/price -> scene_headline with big word (e.g. FREE); booking/online -> scene_phone "
+            "ui booking or video_call (video = the speaker's own footage); patient questions -> scene_phone ui chat with "
+            "tags; process/journey -> scene_flow; what you will get -> scene_steps; categories/lifestyles -> scene_icons; "
+            "types (skin types etc.) -> scene_cards.",
+            "On speaker shots you can add headline_card for the key offer and chat_bubbles with a replies counter "
+            "when messages are mentioned.",
+            "End: scene_cta for the last 10-20 s (until_end true) with a doctor photo taken from the speaker footage "
+            "(photo.asset_id/time), headline with *FREE* accent, credentials, a WHATSAPP NOW button and the phone number.",
+            "On-screen text: short UPPERCASE English phrases (2-5 words) that summarise the spoken line. Use only facts "
+            "from the script or the user; never invent numbers, credentials or claims.",
+            "Time every item with at_text (a 3-6 word phrase copied exactly from the transcript) and optional end_text; "
+            "scenes should start on the first word of the idea they illustrate.",
+            "Check 2-3 key scenes with preview_graphic before rendering a preview.",
+        ]),
 }
 
 
@@ -176,7 +214,7 @@ def load_profile(name: str | None = None) -> dict:
     return _deep_merge(base or PREMIUM_COMMERCIAL, override or {}) | {"name": name}
 
 
-_ALLOWED_TOP = set(PREMIUM_COMMERCIAL) | {"notes", "brand", "custom_rules"}
+_ALLOWED_TOP = set(PREMIUM_COMMERCIAL) | {"notes", "brand", "custom_rules", "storyboard_guide"}
 
 
 def update_profile(name: str, changes: dict, set_active: bool = False, base: str | None = None) -> dict:

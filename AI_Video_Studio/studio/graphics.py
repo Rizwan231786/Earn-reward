@@ -159,6 +159,49 @@ def draw_icon(draw: ImageDraw.ImageDraw, name: str, cx: int, cy: int, r: int, co
     elif name == "chat":
         draw.rounded_rectangle((cx - k, cy - k * 0.75, cx + k, cy + k * 0.45), int(k * 0.35), fill=color)
         draw.polygon([(cx - k * 0.5, cy + k * 0.3), (cx - k * 0.1, cy + k * 0.3), (cx - k * 0.6, cy + k * 0.95)], fill=color)
+    elif name == "drop":
+        draw.polygon([(cx, cy - k), (cx - k * 0.62, cy + k * 0.05), (cx + k * 0.62, cy + k * 0.05)], fill=color)
+        draw.ellipse((cx - k * 0.65, cy - k * 0.25, cx + k * 0.65, cy + k * 0.95), fill=color)
+    elif name == "user":
+        draw.ellipse((cx - k * 0.42, cy - k * 0.95, cx + k * 0.42, cy - k * 0.1), fill=color)
+        draw.pieslice((cx - k * 0.85, cy - k * 0.05, cx + k * 0.85, cy + k * 1.5), 180, 360, fill=color)
+    elif name == "video":
+        draw.rounded_rectangle((cx - k, cy - k * 0.55, cx + k * 0.35, cy + k * 0.55), int(k * 0.18), fill=color)
+        draw.polygon([(cx + k * 0.4, cy - k * 0.1), (cx + k, cy - k * 0.5), (cx + k, cy + k * 0.5), (cx + k * 0.4, cy + k * 0.1)],
+                     fill=color)
+    elif name == "home":
+        draw.polygon([(cx, cy - k), (cx - k, cy - k * 0.05), (cx + k, cy - k * 0.05)], outline=color, width=lw)
+        draw.rectangle((cx - k * 0.68, cy - k * 0.05, cx + k * 0.68, cy + k * 0.85), outline=color, width=lw)
+        draw.rectangle((cx - k * 0.2, cy + k * 0.3, cx + k * 0.2, cy + k * 0.85), fill=color)
+    elif name == "briefcase":
+        draw.rounded_rectangle((cx - k, cy - k * 0.45, cx + k, cy + k * 0.8), int(k * 0.15), outline=color, width=lw)
+        draw.rounded_rectangle((cx - k * 0.38, cy - k * 0.85, cx + k * 0.38, cy - k * 0.45), int(k * 0.1), outline=color,
+                               width=lw)
+        draw.line([(cx - k, cy + k * 0.1), (cx + k, cy + k * 0.1)], fill=color, width=lw)
+    elif name == "graduation":
+        draw.polygon([(cx, cy - k * 0.8), (cx - k, cy - k * 0.25), (cx, cy + k * 0.3), (cx + k, cy - k * 0.25)], outline=color,
+                     width=lw)
+        draw.arc((cx - k * 0.6, cy - k * 0.3, cx + k * 0.6, cy + k * 0.8), 0, 180, fill=color, width=lw)
+        draw.line([(cx + k * 0.85, cy - k * 0.2), (cx + k * 0.85, cy + k * 0.5)], fill=color, width=lw)
+    elif name == "monitor":
+        draw.rounded_rectangle((cx - k, cy - k * 0.75, cx + k, cy + k * 0.4), int(k * 0.12), outline=color, width=lw)
+        draw.line([(cx, cy + k * 0.4), (cx, cy + k * 0.75)], fill=color, width=lw)
+        draw.line([(cx - k * 0.45, cy + k * 0.8), (cx + k * 0.45, cy + k * 0.8)], fill=color, width=lw)
+    elif name == "pulse":
+        draw.line([(cx - k, cy), (cx - k * 0.4, cy), (cx - k * 0.15, cy - k * 0.7), (cx + k * 0.15, cy + k * 0.7),
+                   (cx + k * 0.4, cy), (cx + k, cy)], fill=color, width=lw, joint="curve")
+    elif name == "search":
+        draw.ellipse((cx - k * 0.85, cy - k * 0.85, cx + k * 0.35, cy + k * 0.35), outline=color, width=lw)
+        draw.line([(cx + k * 0.25, cy + k * 0.25), (cx + k * 0.9, cy + k * 0.9)], fill=color, width=lw)
+    elif name == "document":
+        draw.rounded_rectangle((cx - k * 0.7, cy - k, cx + k * 0.7, cy + k), int(k * 0.12), outline=color, width=lw)
+        for j in range(3):
+            draw.line([(cx - k * 0.4, cy - k * 0.45 + j * k * 0.45), (cx + k * 0.4, cy - k * 0.45 + j * k * 0.45)], fill=color,
+                      width=max(1, lw // 2 + 1))
+    elif name == "warning":
+        draw.polygon([(cx, cy - k), (cx - k, cy + k * 0.8), (cx + k, cy + k * 0.8)], outline=color, width=lw)
+        draw.line([(cx, cy - k * 0.3), (cx, cy + k * 0.25)], fill=color, width=lw)
+        draw.ellipse((cx - lw * 0.6, cy + k * 0.45, cx + lw * 0.6, cy + k * 0.45 + lw * 1.2), fill=color)
     else:  # dot
         draw.ellipse((cx - k * 0.4, cy - k * 0.4, cx + k * 0.4, cy + k * 0.4), fill=color)
 

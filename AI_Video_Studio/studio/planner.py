@@ -552,6 +552,11 @@ def apply_plan_changes(project: Project, changes: list[dict]) -> Timeline:
         elif op == "add_graphic":
             g = dict(ch["graphic"])
             g.setdefault("id", f"gfx_{len(tl.graphics)+1:02d}")
+            if g.get("at_text") or g.get("until_end") or g.get("end_text"):
+                words = (project.read_json("audio/transcript.json") or {}).get("words") or []
+                g, _, warn = resolve_item_timing(project, tl, g, words, _timeline_map(project, tl, words))
+                if warn and "start" not in g:
+                    raise ValueError(warn)
             tl.graphics.append(Graphic(**g))
         elif op == "update_graphic":
             g = next((x for x in tl.graphics if x.id == ch["id"]), None)
@@ -601,3 +606,128 @@ def _merge_model(base: dict, patch: dict) -> dict:
         else:
             out[k] = v
     return out
+
+
+# ---------------------------------------------------------------------------
+# Storyboard (designed scenes + overlays timed to spoken phrases)
+# ---------------------------------------------------------------------------
+def _norm_tok(t: str) -> str:
+    return re.sub(r"[^\w%]", "", t.lower())
+
+
+def find_phrase(words: list[dict], phrase: str, after_idx: int = 0) -> tuple[int | None, int | None, float]:
+    """Locate a spoken phrase in the transcript (exact, then fuzzy). Returns (first_idx, last_idx, score)."""
+    import difflib
+    toks = [_norm_tok(x) for x in str(phrase).split() if _norm_tok(x)]
+    if not toks or not words:
+        return None, None, 0.0
+    wn = [_norm_tok(w["word"]) for w in words]
+    n = len(toks)
+    for start in (after_idx, 0):
+        for i in range(start, len(wn) - n + 1):
+            if wn[i:i + n] == toks:
+                return i, i + n - 1, 1.0
+    best: tuple[int | None, int | None, float] = (None, None, 0.0)
+    for start in (after_idx, 0):
+        for i in range(start, max(start, len(wn) - n) + 1):
+            r = difflib.SequenceMatcher(a=wn[i:i + n], b=toks, autojunk=False).ratio()
+            if r > best[2] + 1e-9:
+                best = (i, min(len(wn) - 1, i + n - 1), r)
+        if best[2] >= 0.6:
+            break
+    return best if best[2] >= 0.6 else (None, None, best[2])
+
+
+def _timeline_map(project: Project, tl: Timeline, words: list[dict]):
+    vo = project.voiceover()
+    dur = float(((vo or {}).get("info") or {}).get("duration") or tl.duration)
+    tm = TimeMap(keep_intervals(words, dur, tl.audio.max_pause)) if (tl.audio.tighten_pauses and words) else TimeMap.identity(dur)
+    return lambda t: tl.voiceover_offset + tm(t)
+
+
+def resolve_item_timing(project: Project, tl: Timeline, item: dict, words: list[dict], tmap, after_idx: int = 0
+                        ) -> tuple[dict, int, str | None]:
+    """Turn at_text / end_text / until_end into start & duration (timeline seconds)."""
+    it = dict(item)
+    warn = None
+    idx_after = after_idx
+    is_scene = str(it.get("type", "")).startswith("scene_")
+    if it.get("at_text"):
+        a, b, score = find_phrase(words, it["at_text"], after_idx)
+        if a is None:
+            warn = f"'{it['at_text']}' not found in the transcript (best match {score:.0%}); item skipped"
+            return it, after_idx, warn
+        it["start"] = round(max(0.0, tmap(words[a]["start"]) - float(it.get("lead", 0.12))), 3)
+        idx_after = b + 1
+        if score < 1.0:
+            warn = f"'{it['at_text']}' matched approximately ({score:.0%})"
+    if "start" not in it:
+        return it, after_idx, "item needs at_text or start"
+    if it.get("until_end"):
+        it["duration"] = round(max(0.5, tl.duration - it["start"]), 3)
+    elif it.get("end_text"):
+        a2, b2, sc2 = find_phrase(words, it["end_text"], idx_after if it.get("at_text") else after_idx)
+        if a2 is not None:
+            it["duration"] = round(max(0.8, tmap(words[b2]["end"]) + 0.15 - it["start"]), 3)
+            idx_after = b2 + 1
+        else:
+            warn = (warn + "; " if warn else "") + f"end_text '{it['end_text']}' not found - default duration used"
+    it.setdefault("duration", 4.5 if is_scene else 3.5)
+    it["duration"] = round(min(float(it["duration"]), max(0.5, tl.duration - it["start"])), 3)
+    for k in ("at_text", "end_text", "until_end", "lead"):
+        it.pop(k, None)
+    return it, idx_after, warn
+
+
+def set_storyboard(project: Project, items: list[dict], replace: bool = True) -> tuple[Timeline, dict]:
+    data = project.read_json("editing_timeline.json")
+    if not data:
+        raise ValueError("No editing plan yet. Run create_editing_plan first.")
+    tl = Timeline(**data)
+    tr = project.read_json("audio/transcript.json") or {}
+    words = tr.get("words") or []
+    tmap = _timeline_map(project, tl, words)
+    if replace:
+        tl.graphics = [g for g in tl.graphics if not g.id.startswith("sb_")]
+        tl.sfx = [x for x in tl.sfx if not x.reason.startswith("storyboard")]
+    warnings, placed = [], []
+    after = 0
+    n0 = sum(1 for g in tl.graphics if g.id.startswith("sb_"))
+    for i, raw in enumerate(items):
+        it, after, warn = resolve_item_timing(project, tl, raw, words, tmap, after)
+        if warn:
+            warnings.append(f"item {i + 1} ({raw.get('type')}): {warn}")
+        if "start" not in it:
+            continue
+        sfx = it.pop("sfx", "auto")
+        it.setdefault("animation", "fade")
+        it["id"] = f"sb_{n0 + len(placed) + 1:02d}"
+        try:
+            g = Graphic(**it)
+        except Exception as e:  # noqa: BLE001
+            warnings.append(f"item {i + 1}: invalid ({e})")
+            continue
+        placed.append(g)
+        if sfx not in (None, "none", ""):
+            name = sfx if sfx != "auto" else ("whoosh_soft" if g.type.startswith("scene_") else
+                                              "ui_tap" if g.type in ("label_pill", "counter", "chat_bubbles") else None)
+            if name:
+                tl.sfx.append(SoundEffect(id=f"sfx_sb{len(placed):02d}", name=name, time=round(max(0.0, g.start - 0.08), 3),
+                                          volume_db=-20.0 if g.type.startswith("scene_") else -22.0,
+                                          reason=f"storyboard {g.type}"))
+    # scenes must not overlap: trim the earlier one
+    scenes = sorted((g for g in placed if g.type.startswith("scene_")), key=lambda g: g.start)
+    for a, b in zip(scenes, scenes[1:]):
+        if a.start + a.duration > b.start:
+            a.duration = round(max(0.5, b.start - a.start), 3)
+    tl.graphics += placed
+    total_scene = sum(g.duration for g in scenes)
+    project.write_json("editing_timeline.json", tl.model_dump())
+    project.log_event(f"storyboard set: {len(placed)} items")
+    project.save()
+    report = {
+        "items": [{"id": g.id, "type": g.type, "start": g.start, "end": round(g.start + g.duration, 2)} for g in placed],
+        "scene_coverage": f"{100 * total_scene / max(0.1, tl.duration):.0f}% of the video is full-screen scenes",
+        "warnings": warnings,
+    }
+    return tl, report
