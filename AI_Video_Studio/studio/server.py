@@ -691,10 +691,13 @@ def render_video(project_id: str, output_name: str = "", overwrite_existing: boo
 
 
 @tool
-def get_render_status(job_id: str = "", project_id: str = "") -> dict:
+def get_render_status(job_id: str = "", project_id: str = "", wait_seconds: float = 0) -> dict:
     """Progress of a background job (render, transcription, analysis): status, stage, percent, result or error.
+    wait_seconds (max 300) blocks until the job finishes or the time runs out - use it instead of polling quickly.
     Without job_id, lists recent jobs (optionally for one project)."""
     if job_id:
+        if wait_seconds and wait_seconds > 0:
+            jobs_mod.wait_for(job_id, min(float(wait_seconds), 300.0))
         j = jobs_mod.get_job(job_id)
         if not j:
             raise ValueError(f"Job '{job_id}' not found")

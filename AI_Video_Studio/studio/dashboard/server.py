@@ -13,6 +13,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .. import ai_director
 from .. import jobs as jobs_mod
 from .. import profiles, projects
 from .. import server as tools
@@ -82,6 +83,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "profiles": profiles.list_profiles()})
         if path == "/api/inbox":
             return self._json(_call(tools.list_inbox))
+        if path == "/api/ai/status":
+            return self._json(ai_director.claude_status())
+        if path == "/api/ai/log":
+            return self._json(ai_director.run_state(q.get("job", ""), int(q.get("since", 0) or 0)))
         if path == "/api/jobs":
             return self._json({"ok": True, "jobs": jobs_mod.list_jobs(q.get("project") or None, 15)})
         m = re.fullmatch(r"/files/([\w-]+)/(.+)", path)
@@ -101,6 +106,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/projects":
             return self._json(_call(tools.create_project, name=b.get("name", "Untitled"), aspect=b.get("aspect", ""),
                                     profile=b.get("profile", "")))
+        if path == "/api/ai/run":
+            return self._json(ai_director.start(b))
         if path == "/api/profiles/active":
             return self._json(_call(tools.set_active_profile, name=b["name"]))
         m = re.fullmatch(r"/api/jobs/([\w-]+)/cancel", path)
