@@ -211,3 +211,33 @@ def test_timeline_sync_mode(studio_home, media_dir):
     assert any("Sync mode" in n for n in tl.notes)
     for seg in tl.segments:  # lip sync: source time == timeline time
         assert seg.src_in == pytest.approx(seg.timeline_start, abs=0.01)
+
+
+def test_faster_whisper_gets_samples_not_path(project, monkeypatch):
+    """Regression: PyAV >= 19 breaks faster-whisper's file decoder (metadata_errors). We must pass samples."""
+    import types
+
+    import numpy as np
+
+    import faster_whisper
+    from studio import transcription
+    seen = {}
+
+    class FakeModel:
+        def __init__(self, *a, **kw):
+            seen["compute_type"] = kw.get("compute_type")
+
+        def transcribe(self, audio, **kw):
+            seen["audio"] = audio
+            w = types.SimpleNamespace(word="Assalam", start=0.1, end=0.5, probability=0.9)
+            seg = types.SimpleNamespace(end=0.5, words=[w])
+            return iter([seg]), types.SimpleNamespace(language="en")
+
+    monkeypatch.setattr(faster_whisper, "WhisperModel", FakeModel)
+    monkeypatch.setattr(transcription, "pick_engine", lambda: "faster-whisper")
+    monkeypatch.setattr(transcription, "model_cached", lambda e, m: True)
+    tr = transcription.transcribe(project, "roman_urdu")
+    assert isinstance(seen["audio"], np.ndarray) and seen["audio"].dtype == np.float32
+    assert abs(len(seen["audio"]) / 16000 - 5.2) < 0.05  # whole voiceover, 16 kHz
+    assert seen["compute_type"] == "int8"  # CPU-only machine
+    assert tr["words"][0]["word"] == "Assalam"

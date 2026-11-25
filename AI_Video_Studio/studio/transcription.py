@@ -114,6 +114,18 @@ def prepare_voice_wav(project: Project, asset: dict) -> Path:
     return dest
 
 
+def load_wav_16k(path: Path):
+    """Read the 16 kHz mono PCM WAV produced by prepare_voice_wav as float32 samples (-1..1)."""
+    import wave
+
+    import numpy as np
+    with wave.open(str(path), "rb") as w:
+        if w.getframerate() != 16000 or w.getnchannels() != 1 or w.getsampwidth() != 2:
+            raise ValueError(f"unexpected WAV format in {path.name}")
+        data = w.readframes(w.getnframes())
+    return np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
+
+
 def speech_regions(wav: Path, total: float) -> list[tuple[float, float]]:
     sil = silence_intervals(wav, noise_db=-38, min_dur=0.3)
     regions, t = [], 0.0
@@ -272,7 +284,9 @@ def transcribe(project: Project, language_mode: str = "roman_urdu", model: str |
             compute = "float16" if gpu else "int8"
         wm = WhisperModel(model, device=device, compute_type=compute, download_root=str(s.models_dir),
                           local_files_only=not (allow_model_download or cfg.get("allow_model_download")))
-        segments, info = wm.transcribe(str(wav), language=lang, task="transcribe", initial_prompt=prompt,
+        # Pass decoded samples, not a path: faster-whisper's own PyAV decoder breaks with PyAV >= 19
+        # ("open() got an unexpected keyword argument 'metadata_errors'"). FFmpeg already made the WAV.
+        segments, info = wm.transcribe(load_wav_16k(wav), language=lang, task="transcribe", initial_prompt=prompt,
                                        word_timestamps=True, vad_filter=True, beam_size=5,
                                        condition_on_previous_text=False)
         detected = info.language
